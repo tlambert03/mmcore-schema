@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Device(BaseModel):
@@ -197,6 +197,13 @@ class PixelSizeConfiguration(Configuration):
 
 
 class MMConfigFile(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        json_schema_extra={
+            "additionalProperties": False,
+            "$id": "https://micro-manager.org/schemas/mmconfig.schema.json",
+        },
+    )
+
     devices: list[Device] = Field(
         default_factory=list,
         description=(

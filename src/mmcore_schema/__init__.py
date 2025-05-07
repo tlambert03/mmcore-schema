@@ -8,7 +8,7 @@ except PackageNotFoundError:
     __version__ = "uninstalled"
 
 
-from ._schema import (
+from ._mmconfig_schema import (
     ConfigGroup,
     Configuration,
     CoreProperties,

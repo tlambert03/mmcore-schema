@@ -14,7 +14,7 @@ repos:
         stages: [manual]
         name: generate schema
         language: system
-        files: ".*/_schema.py$"
+        files: ".*/_mmconfig_schema.py$"
         args: ["src/mmcore_schema/mmconfig.schema.json"]
         entry: uv run write_schema.py
 
@@ -51,5 +51,5 @@ repos:
       - id: mypy
         files: "^src/"
         # # you have to add the things you want to type check against here
-        # additional_dependencies:
-        #   - numpy
+        additional_dependencies:
+          - pydantic
