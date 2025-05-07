@@ -19,43 +19,44 @@ name = "mmcore-schema"
 dynamic = ["version"]
 description = "Schema for mmCoreAndDevices"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "BSD-3-Clause" }
 authors = [{ name = "Talley Lambert", email = "talley.lambert@gmail.com" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
-dependencies = []
-
-# https://peps.python.org/pep-0621/#dependencies-optional-dependencies
-[project.optional-dependencies]
-test = ["pytest", "pytest-cov"]
-dev = [
-    "ipython",
-    "mypy",
-    "pdbpp",  # https://github.com/pdbpp/pdbpp
-    "pre-commit",
-    "rich",  # https://github.com/Textualize/rich
-    "ruff",
-]
+dependencies = ["pydantic>=2.10"]
 
 [project.urls]
 homepage = "https://github.com/tlambert03/mmcore-schema"
 repository = "https://github.com/tlambert03/mmcore-schema"
+
+[dependency-groups]
+dev = [
+    "ipython>=8.36.0",
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "pyright>=1.1.400",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "rich>=14.0.0",
+    "ruff>=0.11.8",
+]
 
 # https://docs.astral.sh/ruff
 [tool.ruff]
 line-length = 88
 target-version = "py39"
 src = ["src"]
+fix = true
+unsafe-fixes = true
 
 # https://docs.astral.sh/ruff/rules
 [tool.ruff.lint]
@@ -72,7 +73,7 @@ select = [
     "B",    # flake8-bugbear
     "A001", # flake8-builtins
     "RUF",  # ruff-specific rules
-    "TCH",  # flake8-type-checking
+    "TC",   # flake8-type-checking
     "TID",  # flake8-tidy-imports
 ]
 ignore = [
@@ -85,7 +86,7 @@ ignore = [
 # https://docs.astral.sh/ruff/formatter/
 [tool.ruff.format]
 docstring-code-format = true
-skip-magic-trailing-comma = false  # default is false
+skip-magic-trailing-comma = false # default is false
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
 [tool.mypy]
@@ -95,6 +96,11 @@ disallow_any_generics = false
 disallow_subclassing_any = false
 show_error_codes = true
 pretty = true
+
+[tool.pyright]
+include = ["src"]
+enableExperimentalFeatures = true
+
 
 # https://docs.pytest.org/
 [tool.pytest.ini_options]
@@ -117,10 +123,3 @@ exclude_lines = [
 
 [tool.coverage.run]
 source = ["mmcore_schema"]
-
-[tool.check-manifest]
-ignore = [
-    ".pre-commit-config.yaml",
-    ".ruff_cache/**/*",
-    "tests/**/*",
-]
