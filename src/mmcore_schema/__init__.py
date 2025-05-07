@@ -1,7 +1,6 @@
 """Schema for mmCoreAndDevices."""
 
 from importlib.metadata import PackageNotFoundError, version
-from typing import Literal
 
 try:
     __version__ = version("mmcore-schema")

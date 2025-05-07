@@ -8,13 +8,32 @@ ci:
   autoupdate_commit_msg: "ci(pre-commit.ci): autoupdate"
 
 repos:
+  - repo: local
+    hooks:
+      - id: gen-schema
+        stages: [manual]
+        name: generate schema
+        language: system
+        files: ".*/_schema.py$"
+        args: ["src/mmcore_schema/mmconfig.schema.json"]
+        entry: uv run write_schema.py
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ".*\\.md"
+      - id: end-of-file-fixer
+      - id: check-json
+      - id: check-added-large-files
+
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.24.1
     hooks:
       - id: validate-pyproject
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1
+    rev: v1.32.0
     hooks:
       - id: typos
         args: [--force-exclude]  # omitting --write-changes
@@ -34,4 +53,3 @@ repos:
         # # you have to add the things you want to type check against here
         # additional_dependencies:
         #   - numpy
-
