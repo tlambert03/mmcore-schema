@@ -1,7 +1,6 @@
 """Write the JSON schema for the MMConfigFile model to a file."""
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +9,21 @@ from pydantic import json_schema
 from pydantic_core.core_schema import NullableSchema
 
 import mmcore_schema
+
+
+class _Generator(json_schema.GenerateJsonSchema):
+    def nullable_schema(self, schema: NullableSchema) -> dict[str, Any]:
+        inner_json_schema = self.generate_inner(schema["schema"])
+        return {"type": [inner_json_schema["type"], "null"]}
+
+    def generate(
+        self,
+        schema: pydantic_core.CoreSchema,
+        mode: json_schema.JsonSchemaMode = "validation",
+    ) -> dict[str, Any]:
+        """Generate a JSON schema with a custom dialect."""
+        out = super().generate(schema, mode)
+        return {"$schema": self.schema_dialect, **_sort_schema(out)}
 
 
 def _sort_schema(d: dict) -> dict:
@@ -31,33 +45,24 @@ def _sort_schema(d: dict) -> dict:
     return dict(sorted(d.items(), key=lambda item: sort_key(item[0])))
 
 
-class _GenerateJsonSchemaWithDialect(json_schema.GenerateJsonSchema):
-    def nullable_schema(self, schema: NullableSchema) -> dict[str, Any]:
-        inner_json_schema = self.generate_inner(schema["schema"])
-        return {"type": [inner_json_schema["type"], "null"]}
+def main() -> None:
+    """Write the JSON schema for the MMConfigFile model to a file."""
+    extra = mmcore_schema.MMConfigFile.model_config.get("json_schema_extra")
+    assert isinstance(extra, dict) and "$id" in extra
+    # example id_: /schemas/mmconfig/1.0/mmconfig.schema.json
+    id_ = str(extra["$id"]).replace(mmcore_schema.SCHEMA_URL_BASE, "")
 
-    def generate(
-        self,
-        schema: pydantic_core.CoreSchema,
-        mode: json_schema.JsonSchemaMode = "validation",
-    ) -> dict[str, Any]:
-        """Generate a JSON schema with a custom dialect."""
-        out = super().generate(schema, mode)
-        return {"$schema": self.schema_dialect, **_sort_schema(out)}
+    # mirror the directory structure of the schema URL
+    dest = Path(Path(__file__).parent.absolute(), *id_.split("/"))
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-
-if len(sys.argv) > 1:
-    dest = Path(sys.argv[1])
-else:
-    dest = Path(mmcore_schema.__file__).parent / "mmconfig.schema.json"
-content = (
-    json.dumps(
-        mmcore_schema.MMConfigFile.model_json_schema(
-            schema_generator=_GenerateJsonSchemaWithDialect
-        ),
-        indent=2,
-    )
-    + "\n"
-)
-if dest.read_text(encoding="utf-8") != content:
+    # write the schema to the file, only if it has changed
+    schema = mmcore_schema.MMConfigFile.model_json_schema(schema_generator=_Generator)
+    content = json.dumps(schema, indent=2) + "\n"
+    if dest.exists() and dest.read_text(encoding="utf-8") == content:
+        return
     dest.write_text(content, encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

@@ -9,6 +9,7 @@ except PackageNotFoundError:
 
 
 from ._mmconfig_schema import (
+    SCHEMA_URL_BASE,
     ConfigGroup,
     Configuration,
     CoreProperties,
@@ -20,6 +21,7 @@ from ._mmconfig_schema import (
 )
 
 __all__ = [
+    "SCHEMA_URL_BASE",
     "ConfigGroup",
     "Configuration",
     "CoreProperties",

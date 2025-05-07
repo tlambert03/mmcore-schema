@@ -15,7 +15,6 @@ repos:
         name: generate schema
         language: system
         files: ".*/_mmconfig_schema.py$"
-        args: ["src/mmcore_schema/mmconfig.schema.json"]
         entry: uv run write_schema.py
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

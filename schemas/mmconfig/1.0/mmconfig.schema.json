@@ -1,9 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://micro-manager.org/schemas/mmconfig.schema.json",
+  "$id": "https://micro-manager.org/schemas/mmconfig/1.0/mmconfig.schema.json",
   "title": "MMConfigFile",
   "type": "object",
   "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "description": "The version of the schema used to create this file. This is used to determine how to parse the file.",
+      "title": "Schema Version",
+      "type": "string"
+    },
     "devices": {
       "description": "List of devices to load. Devices will be loaded in the order they are listed.",
       "items": {

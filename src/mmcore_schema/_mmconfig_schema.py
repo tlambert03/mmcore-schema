@@ -196,14 +196,23 @@ class PixelSizeConfiguration(Configuration):
     )
 
 
+SCHEMA_URL_BASE = "https://micro-manager.org"
+
+
 class MMConfigFile(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(
         json_schema_extra={
             "additionalProperties": False,
-            "$id": "https://micro-manager.org/schemas/mmconfig.schema.json",
+            "$id": f"{SCHEMA_URL_BASE}/schemas/mmconfig/1.0/mmconfig.schema.json",
         },
     )
-
+    schema_version: Literal["1.0"] = Field(
+        default="1.0",
+        description=(
+            "The version of the schema used to create this file. "
+            "This is used to determine how to parse the file."
+        ),
+    )
     devices: list[Device] = Field(
         default_factory=list,
         description=(
