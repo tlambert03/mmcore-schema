@@ -18,7 +18,11 @@ See [JSON Schema here](/schemas/mmconfig/1.0/mmconfig.schema.json) for the curre
 
 ## Pseudo-code
 
-Loading the config file would look something like this:
+Loading the config file would look something like this.
+
+The below example is written in Python, but it is assumed that C++
+code and/or Java code would also have the ability to load a config file
+and call the same methods.
 
 ```python
 import json
