@@ -12,24 +12,22 @@ from ._mmconfig_schema import (
     SCHEMA_URL_BASE,
     ConfigGroup,
     Configuration,
-    CoreProperties,
     Device,
-    DeviceProperty,
     MMConfigFile,
     PixelSizeConfiguration,
     PropertySetting,
+    PropertyValue,
 )
 
 __all__ = [
     "SCHEMA_URL_BASE",
     "ConfigGroup",
     "Configuration",
-    "CoreProperties",
     "Device",
-    "DeviceProperty",
     "MMConfigFile",
     "PixelSizeConfiguration",
     "PropertySetting",
+    "PropertyValue",
     "__version__",
     "print_schema",
 ]

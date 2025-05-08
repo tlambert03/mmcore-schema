@@ -1,20 +1,86 @@
-from typing import ClassVar, Literal
+from collections.abc import Iterable
+from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+SCHEMA_URL_BASE = "https://micro-manager.org"
 
 
-class Device(BaseModel):
-    label: str = Field(
-        ...,
-        description="The user-determined label to assign to the device",
+class _Base(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid", coerce_numbers_to_str=True
     )
+
+
+class PropertyValue(_Base):
+    """A value associated with a property.
+
+    Note that `device_label` is not specified here, as this object is always a member
+    of a properties list on a specific device.
+    """
+
+    property: str = Field(
+        default=...,
+        description="The name of the property to set on the device",
+    )
+    value: str = Field(
+        default=...,
+        description="The value to set for the property on the device",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _cast_sequence(cls, value: Any) -> Any:
+        """Allow a sequence of 2 items to be passed as (property, value)."""
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            return {"property": value[0], "value": value[1]}
+        return value
+
+
+DeviceLabel = Annotated[
+    str,
+    Field(
+        description=(
+            "The user-determined label to assign to the device."
+            "Must have at least one character, no commas, and cannot be 'Core'."
+        ),
+        pattern="^[^,]+$",
+        min_length=1,
+        json_schema_extra={"not": {"pattern": "^(?i)core$"}},
+    ),
+]
+
+
+class Device(_Base):
+    label: DeviceLabel
     library: str = Field(
-        ...,
+        default=...,
         description="The adapter library that provides the device.",
     )
     name: str = Field(
-        ...,
+        default=...,
         description="The name of the device to load from the library",
+    )
+
+    pre_init_properties: list[PropertyValue] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device before device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
+    )
+    post_init_properties: list[PropertyValue] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device after device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
     )
 
     delay_ms: float | None = Field(
@@ -42,94 +108,73 @@ class Device(BaseModel):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _cast_sequence(cls, value: Any) -> Any:
+        """Allow a sequence of 3 items to be passed as (label, library, name)."""
+        if isinstance(value, (list, tuple)) and len(value) == 3:
+            return {"label": value[0], "library": value[1], "name": value[2]}
+        return value
 
-class DeviceProperty(BaseModel):
-    device_label: str = Field(
-        ...,
-        description="The label of the device to set the property on",
-    )
-    property_name: str = Field(
-        ...,
-        description="The name of the property to set on the device",
-    )
-    value: str = Field(
-        ...,
-        description="The value to set for the property on the device",
-    )
+    @field_validator("label", mode="after")
+    def check_label(cls, v: str) -> str:
+        if v.lower() == "core":
+            raise ValueError(
+                "The label 'Core' is reserved for the Micro-Manager core device."
+            )
+        return v
+
+    def __repr_args__(self) -> Iterable[tuple[str | None, Any]]:
+        # only include set fields in the repr
+        for field, val in super().__repr_args__():
+            if field in self.model_fields_set:
+                yield field, val
 
 
-class CoreProperties(BaseModel):
-    camera_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the camera."),
-    )
-    xy_stage_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the XY stage."),
-    )
-    focus_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the focus device."),
-    )
-    auto_focus_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the auto focus device."),
-    )
-    shutter_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the shutter device."),
-    )
-    image_processor_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the image processor device."),
-    )
-    slm_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the SLM device."),
-    )
-    galvo_device: str | None = Field(
-        default=None,
-        description=("The label of the device to use as the galvo device."),
-    )
-    channel_group: str | None = Field(
-        default=None,
-        description=(
-            "Name of the configuration group that contains optical configuration "
-            "(i.e. channel group) settings."
-        ),
-    )
-    auto_shutter: bool | None = Field(
-        default=None,
-        description=("Whether to enable the auto shutter feature."),
-    )
-    timeout_ms: int | None = Field(
-        default=None,
-        description=("Default timeout for device actions, in milliseconds."),
+class CoreDevice(_Base):
+    """Special device representing the Micro-Manager core."""
+
+    label: Literal["Core"] = Field(
+        default=...,
+        description=("Label MUST be 'Core', and must be provided."),
+        repr=False,
     )
 
 
-class PropertySetting(BaseModel):
+class PropertySetting(_Base):
     """A single device property setting."""
 
     device_label: str = Field(
-        ...,
+        default=...,
         description="The label of the device to set the configuration on",
     )
-    property_name: str = Field(
-        ...,
+    property: str = Field(
+        default=...,
         description="The name of the property to set on the device",
     )
     value: str = Field(
-        ...,
+        default=...,
         description="The value to set for the property on the device",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _cast_sequence(cls, value: Any) -> Any:
+        """Allow a sequence of 3 items to be passed as (dev_label, prop_name, value)."""
+        if isinstance(value, (list, tuple)) and len(value) == 3:
+            return {
+                "device_label": value[0],
+                "property": value[1],
+                "value": value[2],
+            }
+        return value
 
-class Configuration(BaseModel):
+
+class Configuration(_Base):
     """A group of device property settings."""
 
     name: str = Field(
-        ...,
+        default=...,
         description="A name for this configuration. ",
     )
     settings: list[PropertySetting] = Field(
@@ -141,11 +186,11 @@ class Configuration(BaseModel):
     )
 
 
-class ConfigGroup(BaseModel):
+class ConfigGroup(_Base):
     """A group of configuration presets."""
 
     name: str = Field(
-        ...,
+        default=...,
         description="The name of the configuration group.",
     )
     configurations: list[Configuration] = Field(
@@ -157,7 +202,7 @@ class PixelSizeConfiguration(Configuration):
     """Configuration of a pixel size."""
 
     pixel_size_um: float = Field(
-        ...,
+        default=...,
         description=(
             "Pixel size in micrometers. "
             "This is the size of a pixel in the image sensor of the camera."
@@ -196,16 +241,9 @@ class PixelSizeConfiguration(Configuration):
     )
 
 
-SCHEMA_URL_BASE = "https://micro-manager.org"
+class MMConfigFile(_Base):
+    # ----------------------  FIELDS  ----------------------
 
-
-class MMConfigFile(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        json_schema_extra={
-            "additionalProperties": False,
-            "$id": f"{SCHEMA_URL_BASE}/schemas/mmconfig/1.0/mmconfig.schema.json",
-        },
-    )
     schema_version: Literal["1.0"] = Field(
         default="1.0",
         description=(
@@ -213,30 +251,12 @@ class MMConfigFile(BaseModel):
             "This is used to determine how to parse the file."
         ),
     )
-    devices: list[Device] = Field(
+    devices: list[Device | CoreDevice] = Field(
         default_factory=list,
         description=(
             "List of devices to load. "
             "Devices will be loaded in the order they are listed."
         ),
-    )
-    pre_init_properties: list[DeviceProperty] = Field(
-        default_factory=list,
-        description=(
-            "List of properties to set on devices before device initialization. "
-            "Properties will be set in the order they are listed."
-        ),
-    )
-    post_init_properties: list[DeviceProperty] = Field(
-        default_factory=list,
-        description=(
-            "List of properties to set on devices after device initialization. "
-            "Properties will be set in the order they are listed."
-        ),
-    )
-    core_properties: CoreProperties = Field(
-        default_factory=CoreProperties,
-        description=("Default properties to set on the Micro-Manager core."),
     )
     configuration_groups: list[ConfigGroup] = Field(
         default_factory=list,
@@ -254,3 +274,17 @@ class MMConfigFile(BaseModel):
         default_factory=dict,
         description=("User-defined extra properties. Not used by Micro-Manager."),
     )
+
+    # ----------------------  MODEL_CONFIG  ----------------------
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        json_schema_extra={
+            "additionalProperties": False,
+            "$id": f"{SCHEMA_URL_BASE}/schemas/mmconfig/1.0/mmconfig.schema.json",
+        },
+    )
+
+    def model_post_init(self, context: Any) -> None:
+        # always consider the schema version to be set,
+        # so it will be included in the model_dump even with exclude_unset=True
+        self.model_fields_set.add("schema_version")

@@ -10,8 +10,47 @@ from pydantic_core.core_schema import NullableSchema
 
 import mmcore_schema
 
+# A more comprehensive “standard” ordering
+KEY_ORDER = [
+    "$schema",
+    "$id",
+    "type",
+    "title",
+    "description",
+    "format",
+    "default",
+    "enum",
+    "const",
+    "examples",
+    "properties",
+    "patternProperties",
+    "required",
+    "additionalProperties",
+    "items",
+    "additionalItems",
+    "allOf",
+    "anyOf",
+    "oneOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "$defs",
+]
+
 
 class _Generator(json_schema.GenerateJsonSchema):
+    def _sort_recursive(
+        self, value: Any, parent_key: str | None = None
+    ) -> json_schema.JsonSchemaValue:
+        """Sort the schema by type."""
+        if isinstance(value, dict) and parent_key not in ("properties", "default"):
+            sorted_dict: dict[str, json_schema.JsonSchemaValue] = {}
+            for key in sorted(value.keys(), key=_sort_key):
+                sorted_dict[key] = self._sort_recursive(value[key], parent_key=key)
+            return sorted_dict
+        return super()._sort_recursive(value, parent_key=parent_key)
+
     def nullable_schema(self, schema: NullableSchema) -> dict[str, Any]:
         inner_json_schema = self.generate_inner(schema["schema"])
         return {"type": [inner_json_schema["type"], "null"]}
@@ -26,23 +65,12 @@ class _Generator(json_schema.GenerateJsonSchema):
         return {"$schema": self.schema_dialect, **_sort_schema(out)}
 
 
+def _sort_key(k: str) -> int:
+    return KEY_ORDER.index(k) if k in KEY_ORDER else len(KEY_ORDER)
+
+
 def _sort_schema(d: dict) -> dict:
-    custom_order = [
-        "$schema",
-        "$id",
-        "title",
-        "description",
-        "type",
-        "properties",
-        "required",
-        "additionalProperties",
-        "$defs",
-    ]
-
-    def sort_key(k: str) -> int:
-        return custom_order.index(k) if k in custom_order else len(custom_order)
-
-    return dict(sorted(d.items(), key=lambda item: sort_key(item[0])))
+    return dict(sorted(d.items(), key=lambda item: _sort_key(item[0])))
 
 
 def main() -> None:

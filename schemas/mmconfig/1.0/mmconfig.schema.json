@@ -1,263 +1,144 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://micro-manager.org/schemas/mmconfig/1.0/mmconfig.schema.json",
-  "title": "MMConfigFile",
   "type": "object",
+  "title": "MMConfigFile",
   "properties": {
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
-      "description": "The version of the schema used to create this file. This is used to determine how to parse the file.",
+      "type": "string",
       "title": "Schema Version",
-      "type": "string"
+      "description": "The version of the schema used to create this file. This is used to determine how to parse the file.",
+      "default": "1.0",
+      "const": "1.0"
     },
     "devices": {
+      "type": "array",
+      "title": "Devices",
       "description": "List of devices to load. Devices will be loaded in the order they are listed.",
       "items": {
-        "$ref": "#/$defs/Device"
-      },
-      "title": "Devices",
-      "type": "array"
-    },
-    "pre_init_properties": {
-      "description": "List of properties to set on devices before device initialization. Properties will be set in the order they are listed.",
-      "items": {
-        "$ref": "#/$defs/DeviceProperty"
-      },
-      "title": "Pre Init Properties",
-      "type": "array"
-    },
-    "post_init_properties": {
-      "description": "List of properties to set on devices after device initialization. Properties will be set in the order they are listed.",
-      "items": {
-        "$ref": "#/$defs/DeviceProperty"
-      },
-      "title": "Post Init Properties",
-      "type": "array"
-    },
-    "core_properties": {
-      "$ref": "#/$defs/CoreProperties",
-      "description": "Default properties to set on the Micro-Manager core."
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Device"
+          },
+          {
+            "$ref": "#/$defs/CoreDevice"
+          }
+        ]
+      }
     },
     "configuration_groups": {
+      "type": "array",
+      "title": "Configuration Groups",
       "description": "Configuration groups to create.",
       "items": {
         "$ref": "#/$defs/ConfigGroup"
-      },
-      "title": "Configuration Groups",
-      "type": "array"
+      }
     },
     "pixel_size_configurations": {
+      "type": "array",
+      "title": "Pixel Size Configurations",
       "description": "Pixel size configurations to create. These configurations will be used to set the pixel size of the camera.",
       "items": {
         "$ref": "#/$defs/PixelSizeConfiguration"
-      },
-      "title": "Pixel Size Configurations",
-      "type": "array"
+      }
     },
     "extra": {
-      "additionalProperties": true,
-      "description": "User-defined extra properties. Not used by Micro-Manager.",
+      "type": "object",
       "title": "Extra",
-      "type": "object"
+      "description": "User-defined extra properties. Not used by Micro-Manager.",
+      "additionalProperties": true
     }
   },
   "additionalProperties": false,
   "$defs": {
-    "ConfigGroup": {
-      "description": "A group of configuration presets.",
+    "PropertyValue": {
+      "type": "object",
+      "title": "PropertyValue",
+      "description": "A value associated with a property.\n\nNote that `device_label` is not specified here, as this object is always a member\nof a properties list on a specific device.",
       "properties": {
-        "name": {
-          "description": "The name of the configuration group.",
-          "title": "Name",
-          "type": "string"
+        "property": {
+          "type": "string",
+          "title": "Property",
+          "description": "The name of the property to set on the device"
         },
-        "configurations": {
-          "description": "Configuration settings for the group. ",
-          "items": {
-            "$ref": "#/$defs/Configuration"
-          },
-          "title": "Configurations",
-          "type": "array"
+        "value": {
+          "type": "string",
+          "title": "Value",
+          "description": "The value to set for the property on the device"
         }
       },
       "required": [
-        "name"
+        "property",
+        "value"
       ],
-      "title": "ConfigGroup",
-      "type": "object"
-    },
-    "Configuration": {
-      "description": "A group of device property settings.",
-      "properties": {
-        "name": {
-          "description": "A name for this configuration. ",
-          "title": "Name",
-          "type": "string"
-        },
-        "settings": {
-          "description": "List of settings to apply to the configuration. Settings will be applied in the order they are listed.",
-          "items": {
-            "$ref": "#/$defs/PropertySetting"
-          },
-          "title": "Settings",
-          "type": "array"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "Configuration",
-      "type": "object"
-    },
-    "CoreProperties": {
-      "properties": {
-        "camera_device": {
-          "default": null,
-          "description": "The label of the device to use as the camera.",
-          "title": "Camera Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "xy_stage_device": {
-          "default": null,
-          "description": "The label of the device to use as the XY stage.",
-          "title": "Xy Stage Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "focus_device": {
-          "default": null,
-          "description": "The label of the device to use as the focus device.",
-          "title": "Focus Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "auto_focus_device": {
-          "default": null,
-          "description": "The label of the device to use as the auto focus device.",
-          "title": "Auto Focus Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "shutter_device": {
-          "default": null,
-          "description": "The label of the device to use as the shutter device.",
-          "title": "Shutter Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "image_processor_device": {
-          "default": null,
-          "description": "The label of the device to use as the image processor device.",
-          "title": "Image Processor Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "slm_device": {
-          "default": null,
-          "description": "The label of the device to use as the SLM device.",
-          "title": "Slm Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "galvo_device": {
-          "default": null,
-          "description": "The label of the device to use as the galvo device.",
-          "title": "Galvo Device",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "channel_group": {
-          "default": null,
-          "description": "Name of the configuration group that contains optical configuration (i.e. channel group) settings.",
-          "title": "Channel Group",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "auto_shutter": {
-          "default": null,
-          "description": "Whether to enable the auto shutter feature.",
-          "title": "Auto Shutter",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "timeout_ms": {
-          "default": null,
-          "description": "Default timeout for device actions, in milliseconds.",
-          "title": "Timeout Ms",
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "title": "CoreProperties",
-      "type": "object"
+      "additionalProperties": false
     },
     "Device": {
+      "type": "object",
+      "title": "Device",
       "properties": {
         "label": {
-          "description": "The user-determined label to assign to the device",
+          "type": "string",
           "title": "Label",
-          "type": "string"
+          "description": "The user-determined label to assign to the device.Must have at least one character, no commas, and cannot be 'Core'.",
+          "not": {
+            "pattern": "^(?i)core$"
+          },
+          "minLength": 1,
+          "pattern": "^[^,]+$"
         },
         "library": {
-          "description": "The adapter library that provides the device.",
+          "type": "string",
           "title": "Library",
-          "type": "string"
+          "description": "The adapter library that provides the device."
         },
         "name": {
-          "description": "The name of the device to load from the library",
+          "type": "string",
           "title": "Name",
-          "type": "string"
+          "description": "The name of the device to load from the library"
+        },
+        "pre_init_properties": {
+          "type": "array",
+          "title": "Pre Init Properties",
+          "description": "List of properties to set on the device before device initialization. Properties will be set in the order they are listed.",
+          "items": {
+            "$ref": "#/$defs/PropertyValue"
+          }
+        },
+        "post_init_properties": {
+          "type": "array",
+          "title": "Post Init Properties",
+          "description": "List of properties to set on the device after device initialization. Properties will be set in the order they are listed.",
+          "items": {
+            "$ref": "#/$defs/PropertyValue"
+          }
         },
         "delay_ms": {
-          "default": null,
-          "description": "Delay, in milliseconds, for device acitons. (note: Some devices ignore this setting.)",
-          "title": "Delay Ms",
           "type": [
             "number",
             "null"
-          ]
+          ],
+          "title": "Delay Ms",
+          "description": "Delay, in milliseconds, for device acitons. (note: Some devices ignore this setting.)",
+          "default": null
         },
         "focus_direction": {
-          "default": null,
-          "description": "Focus direction (only applicable for Stage Devices, ignored otherwise). -1 = increasing position moves objective away from sample.  0 | None = unknown.  1 = increasing position moves objective towards sample. ",
-          "title": "Focus Direction",
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "title": "Focus Direction",
+          "description": "Focus direction (only applicable for Stage Devices, ignored otherwise). -1 = increasing position moves objective away from sample.  0 | None = unknown.  1 = increasing position moves objective towards sample. ",
+          "default": null
         },
         "state_labels": {
-          "default": null,
-          "description": "A dictionary mapping state numbers to labels (only applicable for State Devices, ignored otherwise). Provides a human-readable label for each state of the device.",
-          "title": "State Labels",
           "type": [
             "object",
             "null"
-          ]
+          ],
+          "title": "State Labels",
+          "description": "A dictionary mapping state numbers to labels (only applicable for State Devices, ignored otherwise). Provides a human-readable label for each state of the device.",
+          "default": null
         }
       },
       "required": [
@@ -265,126 +146,166 @@
         "library",
         "name"
       ],
-      "title": "Device",
-      "type": "object"
+      "additionalProperties": false
     },
-    "DeviceProperty": {
+    "CoreDevice": {
+      "type": "object",
+      "title": "CoreDevice",
+      "description": "Special device representing the Micro-Manager core.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "title": "Label",
+          "description": "Label MUST be 'Core', and must be provided.",
+          "const": "Core"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "PropertySetting": {
+      "type": "object",
+      "title": "PropertySetting",
+      "description": "A single device property setting.",
       "properties": {
         "device_label": {
-          "description": "The label of the device to set the property on",
+          "type": "string",
           "title": "Device Label",
-          "type": "string"
+          "description": "The label of the device to set the configuration on"
         },
-        "property_name": {
-          "description": "The name of the property to set on the device",
-          "title": "Property Name",
-          "type": "string"
+        "property": {
+          "type": "string",
+          "title": "Property",
+          "description": "The name of the property to set on the device"
         },
         "value": {
-          "description": "The value to set for the property on the device",
+          "type": "string",
           "title": "Value",
-          "type": "string"
+          "description": "The value to set for the property on the device"
         }
       },
       "required": [
         "device_label",
-        "property_name",
+        "property",
         "value"
       ],
-      "title": "DeviceProperty",
-      "type": "object"
+      "additionalProperties": false
     },
-    "PixelSizeConfiguration": {
-      "description": "Configuration of a pixel size.",
+    "Configuration": {
+      "type": "object",
+      "title": "Configuration",
+      "description": "A group of device property settings.",
       "properties": {
         "name": {
-          "description": "A name for this configuration. ",
+          "type": "string",
           "title": "Name",
-          "type": "string"
+          "description": "A name for this configuration. "
         },
         "settings": {
+          "type": "array",
+          "title": "Settings",
           "description": "List of settings to apply to the configuration. Settings will be applied in the order they are listed.",
           "items": {
             "$ref": "#/$defs/PropertySetting"
-          },
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigGroup": {
+      "type": "object",
+      "title": "ConfigGroup",
+      "description": "A group of configuration presets.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "The name of the configuration group."
+        },
+        "configurations": {
+          "type": "array",
+          "title": "Configurations",
+          "description": "Configuration settings for the group. ",
+          "items": {
+            "$ref": "#/$defs/Configuration"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "PixelSizeConfiguration": {
+      "type": "object",
+      "title": "PixelSizeConfiguration",
+      "description": "Configuration of a pixel size.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "description": "A name for this configuration. "
+        },
+        "settings": {
+          "type": "array",
           "title": "Settings",
-          "type": "array"
+          "description": "List of settings to apply to the configuration. Settings will be applied in the order they are listed.",
+          "items": {
+            "$ref": "#/$defs/PropertySetting"
+          }
         },
         "pixel_size_um": {
-          "description": "Pixel size in micrometers. This is the size of a pixel in the image sensor of the camera.",
+          "type": "number",
           "title": "Pixel Size Um",
-          "type": "number"
+          "description": "Pixel size in micrometers. This is the size of a pixel in the image sensor of the camera."
         },
         "affine_matrix": {
-          "default": null,
-          "description": "Affine transformation matrix to apply to the configuration group. This is a 2x3 matrix represented as a tuple of 6 floats.",
-          "title": "Affine Matrix",
           "type": [
             "array",
             "null"
-          ]
+          ],
+          "title": "Affine Matrix",
+          "description": "Affine transformation matrix to apply to the configuration group. This is a 2x3 matrix represented as a tuple of 6 floats.",
+          "default": null
         },
         "dxdz": {
-          "default": null,
-          "description": "The angle between the camera's x axis and the axis (direction)of the z drive for the given pixel size configuration. This angle isdimensionless (i.e. the ratio of the translation in x caused by a translation in z, i.e. dx / dz).",
-          "title": "Dxdz",
           "type": [
             "number",
             "null"
-          ]
+          ],
+          "title": "Dxdz",
+          "description": "The angle between the camera's x axis and the axis (direction)of the z drive for the given pixel size configuration. This angle isdimensionless (i.e. the ratio of the translation in x caused by a translation in z, i.e. dx / dz).",
+          "default": null
         },
         "dydz": {
-          "default": null,
-          "description": "The angle between the camera's y axis and the axis (direction)of the z drive for the given pixel size configuration. This angle isdimensionless (i.e. the ratio of the translation in y caused by a translation in z, i.e. dy / dz).",
-          "title": "Dydz",
           "type": [
             "number",
             "null"
-          ]
+          ],
+          "title": "Dydz",
+          "description": "The angle between the camera's y axis and the axis (direction)of the z drive for the given pixel size configuration. This angle isdimensionless (i.e. the ratio of the translation in y caused by a translation in z, i.e. dy / dz).",
+          "default": null
         },
         "optimal_z_um": {
-          "default": null,
-          "description": "User-defined 'optimal' z step size for this pixel size configuration.",
-          "title": "Optimal Z Um",
           "type": [
             "number",
             "null"
-          ]
+          ],
+          "title": "Optimal Z Um",
+          "description": "User-defined 'optimal' z step size for this pixel size configuration.",
+          "default": null
         }
       },
       "required": [
         "name",
         "pixel_size_um"
       ],
-      "title": "PixelSizeConfiguration",
-      "type": "object"
-    },
-    "PropertySetting": {
-      "description": "A single device property setting.",
-      "properties": {
-        "device_label": {
-          "description": "The label of the device to set the configuration on",
-          "title": "Device Label",
-          "type": "string"
-        },
-        "property_name": {
-          "description": "The name of the property to set on the device",
-          "title": "Property Name",
-          "type": "string"
-        },
-        "value": {
-          "description": "The value to set for the property on the device",
-          "title": "Value",
-          "type": "string"
-        }
-      },
-      "required": [
-        "device_label",
-        "property_name",
-        "value"
-      ],
-      "title": "PropertySetting",
-      "type": "object"
+      "additionalProperties": false
     }
   }
 }
