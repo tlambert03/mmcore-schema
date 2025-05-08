@@ -10,9 +10,10 @@ Proposed schema for the [Micro-Manager](https://micro-manager.org/) configuratio
 
 ## Schema
 
-This library declares a proposed JSON schema for the Micro-Manager configuration file format.
-(Note, the actual file could be written in YAML, JSON, or any structured text format,
-but the schema is defined in JSON.)
+This library declares a proposed [JSON schema](https://json-schema.org) for the
+Micro-Manager configuration file format. (Note, the actual file could be written
+in YAML, JSON, or any structured text format, but the schema is defined in
+JSON.)
 
 See [JSON Schema here](/schemas/mmconfig/1.0/mmconfig.schema.json) for the current schema.
 
