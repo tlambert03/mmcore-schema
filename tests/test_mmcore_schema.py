@@ -1,13 +1,14 @@
-from rich import print
+import pytest
+from pydantic import ValidationError
 
 from mmcore_schema import MMConfigFile
 
 
-def test_something() -> None:
+def test_config() -> None:
     cfg = MMConfigFile(
         devices=[
             {"label": "MyDevice", "library": "DemoCamera", "name": "DCam"},
-            ("A", "B", "C"),
+            ("Dev", "Lib", "Name"),  # this is allowed
             {"label": "Core"},
         ],
         configuration_groups=[
@@ -22,7 +23,7 @@ def test_something() -> None:
                                 "property": "PixelSize",
                                 "value": "1.0",
                             },
-                            ("Camera", "Binning", 2),
+                            ("Camera", "Binning", 2),  # this is allowed
                         ],
                     }
                 ],
@@ -30,5 +31,31 @@ def test_something() -> None:
         ],
     )
 
-    print(cfg)
-    print(cfg.model_dump(exclude_unset=True))
+    for mode in ("python", "json"):
+        dumped = cfg.model_dump(exclude_unset=True, mode=mode)
+        assert "schema_version" in dumped
+
+
+def test_config_errors() -> None:
+    # You can have a single label field, but only if it is "Core"
+    MMConfigFile(devices=[{"label": "Core"}])
+    with pytest.raises(ValidationError):
+        MMConfigFile(devices=[{"label": "AnythingButCore"}])
+
+    # cannot have two devices with the same label
+    with pytest.raises(ValidationError):
+        MMConfigFile(devices=[{"label": "Core"}, {"label": "Core"}])
+
+    with pytest.raises(ValidationError):
+        MMConfigFile(devices=[("Dev", "Lib", "Name"), ("Dev", "Lib", "Name")])
+
+    # cannot use Core for any other device
+    with pytest.raises(ValidationError):
+        MMConfigFile(
+            devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}]
+        )
+
+    with pytest.raises(ValidationError):
+        MMConfigFile(
+            devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}]
+        )

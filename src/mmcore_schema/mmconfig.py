@@ -1,14 +1,12 @@
 """Schema for Micro-Manager configuration files."""
 
-from typing import Annotated, Any, ClassVar, Literal
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, overload
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-    model_validator,
-)
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_URL_BASE = "https://micro-manager.org"
 
@@ -168,6 +166,12 @@ class PropertySetting(_Base):
         description="The value to set for the property on the device",
     )
 
+    def __iter__(self) -> Iterable[str]:  # type: ignore[override]
+        """Iterate over the settings in this configuration."""
+        yield self.device_label
+        yield self.property
+        yield self.value
+
     @model_validator(mode="before")
     @classmethod
     def _cast_sequence(cls, value: Any) -> Any:
@@ -196,6 +200,10 @@ class Configuration(_Base):
         ),
     )
 
+    def __iter__(self) -> Iterable[PropertySetting]:  # type: ignore[override]
+        """Iterate over the settings in this configuration."""
+        yield from self.settings
+
 
 class ConfigGroup(_Base):
     """A group of configuration presets."""
@@ -207,6 +215,13 @@ class ConfigGroup(_Base):
     configurations: list[Configuration] = Field(
         default_factory=list, description=("Configuration settings for the group. ")
     )
+
+    def get_configuration(self, name: str) -> Configuration | None:
+        """Return the configuration with the given name, if it exists."""
+        for config in self.configurations:
+            if config.name == name:
+                return config
+        return None
 
 
 class PixelSizeConfiguration(Configuration):
@@ -297,6 +312,26 @@ class MMConfigFile(_Base):
         },
     )
 
+    # -----------------  Special Values and Conveniences  ----------------------
+
+    @overload
+    def get_device(self, label: Literal["Core"]) -> CoreDevice | None: ...  # type: ignore[overload-overlap]
+    @overload
+    def get_device(self, label: str) -> Device | None: ...
+    def get_device(self, label: str) -> Device | CoreDevice | None:
+        """Return the device with the given label, if it exists."""
+        for device in self.devices:
+            if device.label == label:
+                return device
+        return None
+
+    def get_configuration_group(self, name: str) -> ConfigGroup | None:
+        """Return the configuration group with the given name, if it exists."""
+        for group in self.configuration_groups:
+            if group.name == name:
+                return group
+        return None
+
     @property
     def core_device(self) -> CoreDevice | None:
         """Return the core device, if it exists."""
@@ -306,23 +341,29 @@ class MMConfigFile(_Base):
         return None
 
     @property
-    def system_startup(self) -> Configuration | None:
-        """Return the system startup configuration, if it exists."""
+    def system_config_group(self) -> ConfigGroup | None:
+        """Return the system configuration group, if it exists."""
         for group in self.configuration_groups:
             if group.name == "System":
-                for config in group.configurations:
-                    if config.name == "Startup":
-                        return config
+                return group
+        return None
+
+    @property
+    def system_startup(self) -> Configuration | None:
+        """Return the system startup configuration, if it exists."""
+        if grp := self.system_config_group:
+            for config in grp.configurations:
+                if config.name == "Startup":
+                    return config
         return None
 
     @property
     def system_shutdown(self) -> Configuration | None:
         """Return the system shutdown configuration, if it exists."""
-        for group in self.configuration_groups:
-            if group.name == "System":
-                for config in group.configurations:
-                    if config.name == "Shutdown":
-                        return config
+        if grp := self.system_config_group:
+            for config in grp.configurations:
+                if config.name == "Shutdown":
+                    return config
         return None
 
     def model_post_init(self, context: Any) -> None:
@@ -330,3 +371,14 @@ class MMConfigFile(_Base):
         # always consider the schema version to be set,
         # so it will be included in the model_dump even with exclude_unset=True
         self.model_fields_set.add("schema_version")
+
+    # ----------------------  VALIDATORS  ----------------------
+
+    @model_validator(mode="after")
+    def _check_core_device(self) -> "Self":
+        """Check that the core device is present and valid."""
+        device_names = [d.label for d in self.devices]
+        if len(device_names) != len(set(device_names)):
+            duplicates = {name for name in device_names if device_names.count(name) > 1}
+            raise ValueError(f"Duplicate device labels found: {', '.join(duplicates)}")
+        return self
