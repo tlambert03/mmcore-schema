@@ -75,7 +75,7 @@ def _sort_schema(d: dict) -> dict:
 
 def main() -> None:
     """Write the JSON schema for the MMConfigFile model to a file."""
-    extra = mmcore_schema.MMConfigFile.model_config.get("json_schema_extra")
+    extra = mmcore_schema.MMConfig.model_config.get("json_schema_extra")
     assert isinstance(extra, dict) and "$id" in extra
     # example id_: /schemas/mmconfig/1.0/mmconfig.schema.json
     id_ = str(extra["$id"]).replace(mmcore_schema.SCHEMA_URL_BASE, "")
@@ -85,7 +85,7 @@ def main() -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     # write the schema to the file, only if it has changed
-    schema = mmcore_schema.MMConfigFile.model_json_schema(schema_generator=_Generator)
+    schema = mmcore_schema.MMConfig.model_json_schema(schema_generator=_Generator)
     content = json.dumps(schema, indent=2) + "\n"
     if dest.exists() and dest.read_text(encoding="utf-8") == content:
         return

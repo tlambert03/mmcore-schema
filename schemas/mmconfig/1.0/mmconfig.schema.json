@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://micro-manager.org/schemas/mmconfig/1.0/mmconfig.schema.json",
   "type": "object",
-  "title": "MMConfigFile",
+  "title": "MMConfig",
   "description": "Micro-Manager configuration file schema.",
   "properties": {
     "schema_version": {

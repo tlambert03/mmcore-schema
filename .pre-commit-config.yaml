@@ -53,3 +53,4 @@ repos:
         # # you have to add the things you want to type check against here
         additional_dependencies:
           - pydantic
+          - types-PyYAML

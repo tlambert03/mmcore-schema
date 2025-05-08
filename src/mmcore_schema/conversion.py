@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import warnings
 from enum import Enum
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .mmconfig import (
@@ -12,7 +11,7 @@ from .mmconfig import (
     Configuration,
     CoreDevice,
     Device,
-    MMConfigFile,
+    MMConfig,
     PixelSizeConfiguration,
     PropertySetting,
     PropertyValue,
@@ -20,21 +19,29 @@ from .mmconfig import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 
-def convert_file(input: str | Path, output: str | Path) -> None:
-    """Convert a JSON file to a JSON schema."""
-    in_ = Path(input)
-    output = Path(output)
-    if in_.suffix == ".cfg":
-        mm_config = read_mm_cfg_file(in_)
-    else:
-        raise NotImplementedError(f"Unsupported input file format: {in_.suffix}")
+__all__ = ["convert_file", "read_mm_cfg_file"]
 
-    if output.suffix == ".json":
-        output.write_text(mm_config.model_dump_json(exclude_defaults=True, indent=2))
-    else:
-        raise NotImplementedError(f"Unsupported output file format: {output.suffix}")
+
+def convert_file(
+    input: str | Path,
+    output: str | Path,
+    exclude_unset: bool = False,
+    exclude_defaults: bool = True,
+    exclude_none: bool = False,
+    indent: int = 2,
+) -> None:
+    """Convert a Micro-Manager config from one format to another."""
+    mm_config = MMConfig.from_file(input)
+    mm_config.write_file(
+        output,
+        exclude_unset=exclude_unset,
+        exclude_defaults=exclude_defaults,
+        exclude_none=exclude_none,
+        indent=indent,
+    )
 
 
 DELIM = ","
@@ -67,43 +74,7 @@ class CfgCmd(str, Enum):
         return self.value
 
 
-def _invalid_line_error(line: str, expected: int | set, actual: int) -> ValueError:
-    """Return an error if the line does not match the expected format."""
-    return ValueError(
-        f"Invalid configuration file line encountered: {line},\n"
-        f"Expected {expected} tokens, but got {actual}."
-    )
-
-
-def _ensure_device(name: str, devices: dict[str, Device]) -> Device:
-    """Get a device by name or raise an error if not found."""
-    if (device := devices.get(name)) is None:
-        raise ValueError(f"Device {name!r} not found in configuration file.")
-    return device
-
-
-def _ensure_pixel_size_config(
-    name: str, pixel_size_configs: dict[str, PixelSizeConfiguration]
-) -> PixelSizeConfiguration:
-    """Get a pixel size configuration by name or raise an error if not found."""
-    if (cfg := pixel_size_configs.get(name)) is None:
-        raise ValueError(
-            f"Pixel size configuration {name!r} not found in configuration file."
-        )
-    return cfg
-
-
-def _iter_lines(file_path: str | Path) -> Iterator[str]:
-    """Iterate over lines in a file, stripping whitespace and skipping comments."""
-    with open(file_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or line.startswith("//"):
-                continue
-            yield line
-
-
-def read_mm_cfg_file(file_path: str | Path) -> MMConfigFile:
+def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
     """Read a legacy Micro-Manager config file into a MMConfigFile object.
 
     Parameters
@@ -250,12 +221,14 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfigFile:
                 res_id, value = tokens
                 cfg = _ensure_pixel_size_config(res_id, pixel_size_configs)
                 cfg.dxdz = float(value)
+
             case CfgCmd.PixelSizeAngle_dydz:
                 if len(tokens) != 2:
                     raise _invalid_line_error(line, 2, len(tokens))
                 res_id, value = tokens
                 cfg = _ensure_pixel_size_config(res_id, pixel_size_configs)
                 cfg.dydz = float(value)
+
             case CfgCmd.PixelSizeOptimalZ_Um:
                 if len(tokens) != 2:
                     raise _invalid_line_error(line, 2, len(tokens))
@@ -267,9 +240,48 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfigFile:
     if core_device is not None:
         _devices.append(core_device)
 
-    config = MMConfigFile(
+    config = MMConfig(
         devices=_devices,
         configuration_groups=list(config_groups.values()),
         pixel_size_configurations=list(pixel_size_configs.values()),
     )
     return config
+
+
+# --------------- helpers -----------------
+
+
+def _invalid_line_error(line: str, expected: int | set, actual: int) -> ValueError:
+    """Return an error if the line does not match the expected format."""
+    return ValueError(
+        f"Invalid configuration file line encountered: {line},\n"
+        f"Expected {expected} tokens, but got {actual}."
+    )
+
+
+def _ensure_device(name: str, devices: dict[str, Device]) -> Device:
+    """Get a device by name or raise an error if not found."""
+    if (device := devices.get(name)) is None:
+        raise ValueError(f"Device {name!r} not found in configuration file.")
+    return device
+
+
+def _ensure_pixel_size_config(
+    name: str, pixel_size_configs: dict[str, PixelSizeConfiguration]
+) -> PixelSizeConfiguration:
+    """Get a pixel size configuration by name or raise an error if not found."""
+    if (cfg := pixel_size_configs.get(name)) is None:
+        raise ValueError(
+            f"Pixel size configuration {name!r} not found in configuration file."
+        )
+    return cfg
+
+
+def _iter_lines(file_path: str | Path) -> Iterator[str]:
+    """Iterate over lines in a file, stripping whitespace and skipping comments."""
+    with open(file_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("//"):
+                continue
+            yield line

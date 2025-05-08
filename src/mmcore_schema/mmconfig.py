@@ -1,12 +1,14 @@
 """Schema for Micro-Manager configuration files."""
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, overload
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_URL_BASE = "https://micro-manager.org"
 
@@ -267,7 +269,7 @@ class PixelSizeConfiguration(Configuration):
     )
 
 
-class MMConfigFile(_Base):
+class MMConfig(_Base):
     """Micro-Manager configuration file schema."""
 
     # ----------------------  FIELDS  ----------------------
@@ -375,10 +377,60 @@ class MMConfigFile(_Base):
     # ----------------------  VALIDATORS  ----------------------
 
     @model_validator(mode="after")
-    def _check_core_device(self) -> "Self":
-        """Check that the core device is present and valid."""
+    def _validate_model(self) -> "Self":
+        """Perform post-validation checks on the model."""
         device_names = [d.label for d in self.devices]
         if len(device_names) != len(set(device_names)):
             duplicates = {name for name in device_names if device_names.count(name) > 1}
             raise ValueError(f"Duplicate device labels found: {', '.join(duplicates)}")
         return self
+
+    @classmethod
+    def from_file(cls, filename: str | Path) -> "MMConfig":
+        """Load a configuration file from disk."""
+        fpath = Path(filename)
+        if fpath.suffix == ".cfg":
+            from .conversion import read_mm_cfg_file
+
+            return read_mm_cfg_file(fpath)
+        if fpath.suffix == ".json":
+            return MMConfig.model_validate_json(fpath.read_text())
+        if fpath.suffix in {".yaml", ".yml"}:
+            import yaml
+
+            data = yaml.safe_load(fpath.read_text())
+            return MMConfig.model_validate(data)
+        raise NotImplementedError(f"Unsupported input file format: {fpath.suffix}")
+
+    def write_file(
+        self,
+        filename: str | Path,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = True,
+        exclude_none: bool = False,
+        indent: int = 2,
+    ) -> None:
+        """Write the configuration to a file."""
+        output = Path(filename)
+        if output.suffix == ".json":
+            js = self.model_dump_json(
+                exclude_defaults=exclude_defaults,
+                indent=indent,
+                exclude_unset=exclude_unset,
+                exclude_none=exclude_none,
+            )
+            output.write_text(js)
+        elif output.suffix in {".yaml", ".yml"}:
+            data = self.model_dump(
+                exclude_defaults=exclude_defaults,
+                mode="json",
+                exclude_unset=exclude_unset,
+                exclude_none=exclude_none,
+            )
+            import yaml
+
+            output.write_text(yaml.dump(data, indent=indent))
+        else:
+            raise NotImplementedError(
+                f"Unsupported output file format: {output.suffix}"
+            )

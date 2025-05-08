@@ -1,11 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from mmcore_schema import MMConfigFile
+from mmcore_schema import MMConfig
 
 
 def test_config() -> None:
-    cfg = MMConfigFile(
+    cfg = MMConfig(
         devices=[
             {"label": "MyDevice", "library": "DemoCamera", "name": "DCam"},
             ("Dev", "Lib", "Name"),  # this is allowed
@@ -38,24 +38,20 @@ def test_config() -> None:
 
 def test_config_errors() -> None:
     # You can have a single label field, but only if it is "Core"
-    MMConfigFile(devices=[{"label": "Core"}])
+    MMConfig(devices=[{"label": "Core"}])
     with pytest.raises(ValidationError):
-        MMConfigFile(devices=[{"label": "AnythingButCore"}])
+        MMConfig(devices=[{"label": "AnythingButCore"}])
 
     # cannot have two devices with the same label
     with pytest.raises(ValidationError):
-        MMConfigFile(devices=[{"label": "Core"}, {"label": "Core"}])
+        MMConfig(devices=[{"label": "Core"}, {"label": "Core"}])
 
     with pytest.raises(ValidationError):
-        MMConfigFile(devices=[("Dev", "Lib", "Name"), ("Dev", "Lib", "Name")])
+        MMConfig(devices=[("Dev", "Lib", "Name"), ("Dev", "Lib", "Name")])
 
     # cannot use Core for any other device
     with pytest.raises(ValidationError):
-        MMConfigFile(
-            devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}]
-        )
+        MMConfig(devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}])
 
     with pytest.raises(ValidationError):
-        MMConfigFile(
-            devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}]
-        )
+        MMConfig(devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}])

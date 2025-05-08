@@ -32,7 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
-dependencies = ["pydantic>=2.10"]
+dependencies = ["pydantic>=2.10", "pyyaml>=6.0.2"]
 
 [project.urls]
 homepage = "https://github.com/tlambert03/mmcore-schema"
@@ -51,7 +51,11 @@ dev = [
     "pytest-cov>=6.1.1",
     "rich>=14.0.0",
     "ruff>=0.11.8",
+    "types-pyyaml>=6.0.12.20250402",
 ]
+
+[project.scripts]
+mmconfig = "mmcore_schema.__main__:main"
 
 # https://docs.astral.sh/ruff
 [tool.ruff]

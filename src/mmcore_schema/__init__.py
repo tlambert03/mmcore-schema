@@ -8,12 +8,13 @@ except PackageNotFoundError:
     __version__ = "uninstalled"
 
 
+from .conversion import convert_file
 from .mmconfig import (
     SCHEMA_URL_BASE,
     ConfigGroup,
     Configuration,
     Device,
-    MMConfigFile,
+    MMConfig,
     PixelSizeConfiguration,
     PropertySetting,
     PropertyValue,
@@ -24,17 +25,10 @@ __all__ = [
     "ConfigGroup",
     "Configuration",
     "Device",
-    "MMConfigFile",
+    "MMConfig",
     "PixelSizeConfiguration",
     "PropertySetting",
     "PropertyValue",
     "__version__",
-    "print_schema",
+    "convert_file",
 ]
-
-
-def print_schema() -> None:
-    """Print the schema for mmCoreAndDevices to stdout."""
-    import json
-
-    print(json.dumps(MMConfigFile.model_json_schema(), indent=2))
