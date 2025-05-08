@@ -14,14 +14,14 @@ repos:
         stages: [manual]
         name: generate schema
         language: system
-        files: ".*/_mmconfig_schema.py$"
+        files: ".*/mmconfig.py$"
         entry: uv run write_schema.py
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ".*\\.md"
+        exclude: ".*\\.md|.*\\.cfg"
       - id: end-of-file-fixer
       - id: check-json
       - id: check-added-large-files
@@ -35,6 +35,7 @@ repos:
     rev: v1.32.0
     hooks:
       - id: typos
+        exclude: ".*\\.cfg"
         args: [--force-exclude]  # omitting --write-changes
 
   - repo: https://github.com/astral-sh/ruff-pre-commit

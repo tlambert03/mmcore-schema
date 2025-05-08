@@ -1,3 +1,5 @@
+"""Schema for Micro-Manager configuration files."""
+
 from collections.abc import Iterable
 from typing import Annotated, Any, ClassVar, Literal
 
@@ -58,7 +60,10 @@ DeviceLabel = Annotated[
 
 
 class Device(_Base):
+    """A device to load from a library."""
+
     label: DeviceLabel
+
     library: str = Field(
         default=...,
         description="The adapter library that provides the device.",
@@ -117,7 +122,7 @@ class Device(_Base):
         return value
 
     @field_validator("label", mode="after")
-    def check_label(cls, v: str) -> str:
+    def _check_label(cls, v: str) -> str:
         if v.lower() == "core":
             raise ValueError(
                 "The label 'Core' is reserved for the Micro-Manager core device."
@@ -125,6 +130,7 @@ class Device(_Base):
         return v
 
     def __repr_args__(self) -> Iterable[tuple[str | None, Any]]:
+        """Only include set fields in the repr."""
         # only include set fields in the repr
         for field, val in super().__repr_args__():
             if field in self.model_fields_set:
@@ -242,6 +248,8 @@ class PixelSizeConfiguration(Configuration):
 
 
 class MMConfigFile(_Base):
+    """Micro-Manager configuration file schema."""
+
     # ----------------------  FIELDS  ----------------------
 
     schema_version: Literal["1.0"] = Field(
@@ -285,6 +293,7 @@ class MMConfigFile(_Base):
     )
 
     def model_post_init(self, context: Any) -> None:
+        """Called after the model is initialized."""
         # always consider the schema version to be set,
         # so it will be included in the model_dump even with exclude_unset=True
         self.model_fields_set.add("schema_version")

@@ -8,7 +8,7 @@ except PackageNotFoundError:
     __version__ = "uninstalled"
 
 
-from ._mmconfig_schema import (
+from .mmconfig import (
     SCHEMA_URL_BASE,
     ConfigGroup,
     Configuration,

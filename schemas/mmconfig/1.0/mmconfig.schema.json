@@ -3,6 +3,7 @@
   "$id": "https://micro-manager.org/schemas/mmconfig/1.0/mmconfig.schema.json",
   "type": "object",
   "title": "MMConfigFile",
+  "description": "Micro-Manager configuration file schema.",
   "properties": {
     "schema_version": {
       "type": "string",
@@ -76,6 +77,7 @@
     "Device": {
       "type": "object",
       "title": "Device",
+      "description": "A device to load from a library.",
       "properties": {
         "label": {
           "type": "string",
