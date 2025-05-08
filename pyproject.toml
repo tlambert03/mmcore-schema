@@ -43,6 +43,7 @@ dev = [
     "check-jsonschema>=0.33.0",
     "ipython>=8.36.0",
     "mypy>=1.15.0",
+    "pdbpp>=0.11.6 ; sys_platform != 'win32'",
     "pre-commit>=4.2.0",
     "pymmcore>=11.5.0.73.1",
     "pyright>=1.1.400",

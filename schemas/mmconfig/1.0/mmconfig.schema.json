@@ -134,13 +134,26 @@
           "default": null
         },
         "state_labels": {
-          "type": [
-            "object",
-            "null"
-          ],
+          "type": "object",
           "title": "State Labels",
-          "description": "A dictionary mapping state numbers to labels (only applicable for State Devices, ignored otherwise). Provides a human-readable label for each state of the device.",
-          "default": null
+          "description": "A dictionary mapping state numbers to labels (only applicable for State Devices, ignored otherwise). Provides a human-readable label for each state of the device.  NOTE: Keys are integers, but are stored as strings in the JSON file.  This is a workaround for the fact that JSON does not support integer keys in dictionaries.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "children": {
+          "type": "array",
+          "title": "Children",
+          "description": "List of child device labels (only applicable for Hub Devices).",
+          "items": {
+            "type": "string",
+            "description": "The user-determined label to assign to the device.Must have at least one character, no commas, and cannot be 'Core'.",
+            "not": {
+              "pattern": "^(?i)core$"
+            },
+            "minLength": 1,
+            "pattern": "^[^,]+$"
+          }
         }
       },
       "required": [
@@ -160,6 +173,14 @@
           "title": "Label",
           "description": "Label MUST be 'Core', and must be provided.",
           "const": "Core"
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PropertyValue"
+          },
+          "description": "List of properties to set on the Core device. Properties will be set in the order they are listed.",
+          "title": "Properties"
         }
       },
       "required": [
@@ -264,7 +285,8 @@
         "pixel_size_um": {
           "type": "number",
           "title": "Pixel Size Um",
-          "description": "Pixel size in micrometers. This is the size of a pixel in the image sensor of the camera."
+          "description": "Pixel size in micrometers. This is the size of a pixel in the image sensor of the camera.",
+          "default": 0.0
         },
         "affine_matrix": {
           "type": [
@@ -304,8 +326,7 @@
         }
       },
       "required": [
-        "name",
-        "pixel_size_um"
+        "name"
       ],
       "additionalProperties": false
     }

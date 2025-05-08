@@ -1,6 +1,5 @@
 """Schema for Micro-Manager configuration files."""
 
-from collections.abc import Iterable
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import (
@@ -104,13 +103,19 @@ class Device(_Base):
             " 1 = increasing position moves objective towards sample. "
         ),
     )
-    state_labels: dict[int, str] | None = Field(
-        default=None,
+    state_labels: dict[str, str] = Field(
+        default_factory=dict,
         description=(
             "A dictionary mapping state numbers to labels (only applicable for State "
-            "Devices, ignored otherwise). "
-            "Provides a human-readable label for each state of the device."
+            "Devices, ignored otherwise). Provides a human-readable label for each "
+            "state of the device.  NOTE: Keys are integers, but are stored as strings "
+            "in the JSON file.  This is a workaround for the fact that JSON does not "
+            "support integer keys in dictionaries."
         ),
+    )
+    children: list[DeviceLabel] = Field(
+        default_factory=list,
+        description=("List of child device labels (only applicable for Hub Devices)."),
     )
 
     @model_validator(mode="before")
@@ -129,13 +134,6 @@ class Device(_Base):
             )
         return v
 
-    def __repr_args__(self) -> Iterable[tuple[str | None, Any]]:
-        """Only include set fields in the repr."""
-        # only include set fields in the repr
-        for field, val in super().__repr_args__():
-            if field in self.model_fields_set:
-                yield field, val
-
 
 class CoreDevice(_Base):
     """Special device representing the Micro-Manager core."""
@@ -144,6 +142,13 @@ class CoreDevice(_Base):
         default=...,
         description=("Label MUST be 'Core', and must be provided."),
         repr=False,
+    )
+    properties: list[PropertyValue] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the Core device. "
+            "Properties will be set in the order they are listed."
+        ),
     )
 
 
@@ -208,7 +213,7 @@ class PixelSizeConfiguration(Configuration):
     """Configuration of a pixel size."""
 
     pixel_size_um: float = Field(
-        default=...,
+        default=0.0,
         description=(
             "Pixel size in micrometers. "
             "This is the size of a pixel in the image sensor of the camera."
@@ -291,6 +296,34 @@ class MMConfigFile(_Base):
             "$id": f"{SCHEMA_URL_BASE}/schemas/mmconfig/1.0/mmconfig.schema.json",
         },
     )
+
+    @property
+    def core_device(self) -> CoreDevice | None:
+        """Return the core device, if it exists."""
+        for device in self.devices:
+            if isinstance(device, CoreDevice):
+                return device
+        return None
+
+    @property
+    def system_startup(self) -> Configuration | None:
+        """Return the system startup configuration, if it exists."""
+        for group in self.configuration_groups:
+            if group.name == "System":
+                for config in group.configurations:
+                    if config.name == "Startup":
+                        return config
+        return None
+
+    @property
+    def system_shutdown(self) -> Configuration | None:
+        """Return the system shutdown configuration, if it exists."""
+        for group in self.configuration_groups:
+            if group.name == "System":
+                for config in group.configurations:
+                    if config.name == "Shutdown":
+                        return config
+        return None
 
     def model_post_init(self, context: Any) -> None:
         """Called after the model is initialized."""
