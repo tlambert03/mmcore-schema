@@ -4,15 +4,53 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pymmcore
-
 from .mmconfig import CoreDevice
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Protocol
+
     from mmcore_schema.mmconfig import MMConfig
 
+    # defining a protocol, so as to support pymmcore-nano as well as pymmcore
+    class _CoreProtocol(Protocol):
+        def defineConfig(
+            self, group: str, config: str, device: str, prop: str, value: str
+        ) -> None: ...
+        def definePixelSizeConfig(
+            self, key: str, device: str, prop: str, value: str
+        ) -> None: ...
+        def defineStateLabel(self, device: str, state: int, label: str) -> None: ...
+        def initializeAllDevices(self) -> None: ...
+        def isConfigDefined(self, group: str, config: str) -> bool: ...
+        def loadDevice(self, label: str, library: str, name: str) -> None: ...
+        def setAutoFocusDevice(self) -> None: ...
+        def setAutoShutter(self) -> None: ...
+        def setCameraDevice(self, device: str) -> None: ...
+        def setChannelGroup(self, device: str) -> None: ...
+        def setConfig(self, group: str, config: str) -> None: ...
+        def setDeviceDelayMs(self, device: str, value: float) -> None: ...
+        def setFocusDevice(self, device: str) -> None: ...
+        def setFocusDirection(self, device: str, value: float) -> None: ...
+        def setGalvoDevice(self, device: str) -> None: ...
+        def setImageProcessorDevice(self, device: str) -> None: ...
+        def setPixelSizeAffine(self, device: str, matrix: Sequence[float]) -> None: ...
+        def setPixelSizedxdz(self, key: str, value: float) -> None: ...
+        def setPixelSizedydz(self, key: str, value: float) -> None: ...
+        def setPixelSizeOptimalZUm(self, key: str, value: float) -> None: ...
+        def setProperty(
+            self, label: str, propName: str, propValue: bool | float | int | str
+        ) -> None: ...
+        def setShutterDevice(self) -> None: ...
+        def setSLMDevice(self) -> None: ...
+        def setTimeoutMs(self) -> None: ...
+        def setXYStageDevice(self) -> None: ...
+        def unloadAllDevices(self) -> None: ...
+        def updateSystemStateCache(self) -> None: ...
+        def waitForSystem(self) -> None: ...
 
-def load_system_configuration(core: pymmcore.CMMCore, config: MMConfig) -> None:
+
+def load_system_configuration(core: _CoreProtocol, config: MMConfig) -> None:
     """Load system configuration from a MMConfigFile object."""
     core.unloadAllDevices()
 
@@ -31,27 +69,27 @@ def load_system_configuration(core: pymmcore.CMMCore, config: MMConfig) -> None:
         if isinstance(dev, CoreDevice):
             for prop in dev.properties:
                 match prop:
-                    case pymmcore.g_Keyword_CoreCamera:
+                    case "Camera":
                         core.setCameraDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreXYStage:
+                    case "XYStage":
                         core.setXYStageDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreFocus:
+                    case "Focus":
                         core.setFocusDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreShutter:
+                    case "Shutter":
                         core.setShutterDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreAutoFocus:
+                    case "AutoFocus":
                         core.setAutoFocusDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreImageProcessor:
+                    case "ImageProcessor":
                         core.setImageProcessorDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreSLM:
+                    case "SLM":
                         core.setSLMDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreGalvo:
+                    case "Galvo":
                         core.setGalvoDevice(dev.label)
-                    case pymmcore.g_Keyword_CoreChannelGroup:
+                    case "ChannelGroup":
                         core.setChannelGroup(dev.label)
-                    case pymmcore.g_Keyword_CoreAutoShutter:
+                    case "AutoShutter":
                         core.setAutoShutter(dev.label)
-                    case pymmcore.g_Keyword_CoreTimeoutMs:
+                    case "TimeoutMs":
                         core.setTimeoutMs(dev.label)
 
         else:

@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from .pymmcore import _CoreProtocol
+
 
 SCHEMA_URL_BASE = "https://micro-manager.org"
 
@@ -434,3 +436,9 @@ class MMConfig(_Base):
             raise NotImplementedError(
                 f"Unsupported output file format: {output.suffix}"
             )
+
+    def load_in_pymmcore(self, core: "_CoreProtocol") -> None:
+        """Apply the configuration to a Micro-Manager core instance."""
+        from .pymmcore import load_system_configuration
+
+        load_system_configuration(core, self)
