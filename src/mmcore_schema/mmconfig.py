@@ -432,6 +432,10 @@ class MMConfig(_Base):
             import yaml
 
             output.write_text(yaml.dump(data, indent=indent))
+        elif output.suffix == ".cfg":
+            from .conversion import write_mm_cfg_file
+
+            write_mm_cfg_file(self, output)
         else:
             raise NotImplementedError(
                 f"Unsupported output file format: {output.suffix}"

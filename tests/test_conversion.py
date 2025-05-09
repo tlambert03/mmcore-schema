@@ -16,7 +16,7 @@ def cfg_file(request: pytest.FixtureRequest) -> Path:
     return request.param  # type: ignore
 
 
-@pytest.mark.parametrize("ext", [".json", ".yaml"])
+@pytest.mark.parametrize("ext", [".json", ".yaml", ".cfg"])
 def test_read_cfg(cfg_file: Path, tmp_path: Path, ext: str) -> None:
     """Test reading a configuration file."""
 
