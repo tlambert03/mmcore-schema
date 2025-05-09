@@ -43,6 +43,7 @@ pymmcore-plus = ["pymmcore-plus>=0.14.0"]
 test = ["pytest>=8.3.5", "pytest-cov>=6.1.1"]
 dev = [
     { include-group = "test" },
+    { include-group = "pymmcore-plus" },
     "check-jsonschema>=0.33.0",
     "ipython>=8.36.0",
     "mypy>=1.15.0",
