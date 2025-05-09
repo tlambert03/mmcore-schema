@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .mmconfig import CoreDevice
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Container, Sequence
     from typing import Protocol
 
     from mmcore_schema.mmconfig import MMConfig
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
         def setFocusDirection(self, device: str, value: float) -> None: ...
         def setGalvoDevice(self, device: str) -> None: ...
         def setImageProcessorDevice(self, device: str) -> None: ...
+        def setPixelSizeUm(self, device: str, value: float) -> None: ...
         def setPixelSizeAffine(self, device: str, matrix: Sequence[float]) -> None: ...
         def setPixelSizedxdz(self, key: str, value: float) -> None: ...
         def setPixelSizedydz(self, key: str, value: float) -> None: ...
@@ -50,8 +51,21 @@ if TYPE_CHECKING:
         def waitForSystem(self) -> None: ...
 
 
-def load_system_configuration(core: _CoreProtocol, config: MMConfig) -> None:
-    """Load system configuration from a MMConfigFile object."""
+def load_system_configuration(
+    core: _CoreProtocol, config: MMConfig, *, exclude_devices: Container[str] = ()
+) -> None:
+    """Load system configuration from a MMConfigFile object.
+
+    Parameters
+    ----------
+    core : CMMCore | CMMCorePlus
+        The core object to load the configuration into.
+    config : MMConfig
+        The configuration object to load.
+    exclude_devices : Container[str], optional
+        A list of device labels to exclude from loading, usually for testing or
+        for missing devices. By default, no devices are excluded.
+    """
     core.unloadAllDevices()
 
     # 1. Load devices & their per-device settings (delay, focus, state labels)
@@ -92,7 +106,7 @@ def load_system_configuration(core: _CoreProtocol, config: MMConfig) -> None:
                     case "TimeoutMs":
                         core.setTimeoutMs(dev.label)
 
-        else:
+        elif dev.label not in exclude_devices:
             for prop in dev.post_init_properties:
                 core.setProperty(dev.label, prop.property, prop.value)
             if dev.delay_ms is not None:
@@ -107,14 +121,20 @@ def load_system_configuration(core: _CoreProtocol, config: MMConfig) -> None:
     for group in config.configuration_groups:
         for conf in group.configurations:
             for s in conf.settings:
-                core.defineConfig(
-                    group.name, conf.name, s.device_label, s.property, s.value
-                )
+                if s.device_label not in exclude_devices:
+                    core.defineConfig(
+                        group.name, conf.name, s.device_label, s.property, s.value
+                    )
 
     # 5. Pixel-size configurations
     for pix in config.pixel_size_configurations:
         for s in pix.settings:
-            core.definePixelSizeConfig(pix.name, s.device_label, s.property, s.value)
+            if s.device_label not in exclude_devices:
+                core.definePixelSizeConfig(
+                    pix.name, s.device_label, s.property, s.value
+                )
+        if pix.pixel_size_um is not None:
+            core.setPixelSizeUm(pix.name, pix.pixel_size_um)
         if pix.affine_matrix:
             core.setPixelSizeAffine(pix.name, list(pix.affine_matrix))
         if pix.dxdz is not None:
