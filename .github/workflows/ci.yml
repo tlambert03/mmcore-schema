@@ -14,8 +14,6 @@ jobs:
   test:
     name: test ${{ matrix.os }} py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
-    env:
-      UV_FROZEN: 1
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +28,34 @@ jobs:
           enable-cache: true
 
       - name: Test
+        run: uv run --group test --no-dev coverage run -p -m pytest -v --color=yes
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: covreport-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: ./.coverage*
+          include-hidden-files: true
+
+  test-pymmcore:
+    name: test pymmcore
+    runs-on: windows-latest
+    env:
+      UV_NO_SYNC: 1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --no-dev --group test --group pymmcore-plus
+          uv run mmcore install
+
+      - name: Test
         run: uv run coverage run -p -m pytest -v --color=yes
 
       - name: Upload coverage
@@ -41,7 +67,7 @@ jobs:
 
   upload_coverage:
     if: always()
-    needs: [test]
+    needs: [test, test-pymmcore]
     uses: pyapp-kit/workflows/.github/workflows/upload-coverage.yml@v2
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}

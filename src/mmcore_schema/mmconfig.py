@@ -2,7 +2,15 @@
 
 from collections.abc import Container, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Callable, ClassVar, Literal, overload
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Callable,
+    ClassVar,
+    Literal,
+    overload,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -185,12 +193,6 @@ class PropertySetting(_Base):
         default=...,
         description="The value to set for the property on the device",
     )
-
-    def __iter__(self) -> Iterable[str]:  # type: ignore[override]
-        """Iterate over the settings in this configuration."""
-        yield self.device_label
-        yield self.property
-        yield self.value
 
     @model_validator(mode="before")
     @classmethod
@@ -480,7 +482,7 @@ class MMConfig(_Base):
         raise NotImplementedError(f"Unsupported input file format: {fpath.suffix}")
 
     def load_in_pymmcore(
-        self, core: "_CoreProtocol", *, exclude_devices: Container[str]
+        self, core: "_CoreProtocol", *, exclude_devices: Container[str] = ()
     ) -> None:
         """Apply the configuration to a Micro-Manager core instance."""
         from .pymmcore import load_system_configuration
