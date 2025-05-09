@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
     # defining a protocol, so as to support pymmcore-nano as well as pymmcore
     class _CoreProtocol(Protocol):
+        def defineConfigGroup(self, group: str, /) -> None: ...
         def defineConfig(
             self, group: str, config: str, device: str, prop: str, value: str
         ) -> None: ...
@@ -116,6 +117,10 @@ def load_system_configuration(
 
     # 4. Configuration groups
     for group in config.configuration_groups:
+        # this line is actually needed when using pure pymmcore
+        # to trigger `updateAllowedChannelGroups`.
+        core.defineConfigGroup(group.name)
+
         for conf in group.configurations:
             for s in conf.settings:
                 if s.device_label not in exclude_devices:
