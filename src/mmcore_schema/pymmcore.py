@@ -188,8 +188,8 @@ def load_system_configuration(
 
     # CMMCore::loadSystemConfigurationImpl would emit
     # externalCallback_->onSystemConfigurationLoaded() at this point.
-    # we can't do that with pymmcore[nano] since it's not a public API.
-    # but we can emit the event if pymmcore_plus is available
+    # we can't do that with pymmcore[-nano] since it's not a public API.
+    # but we can emit the event if the core is a CMMCorePlus instance.
     if pymmcore_plus := sys.modules.get("pymmcore_plus"):
         if TYPE_CHECKING:
             from pymmcore_plus import CMMCorePlus
