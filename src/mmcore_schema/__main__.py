@@ -26,6 +26,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         nargs="?",
     )
+    parser.add_argument(
+        "--include-unset",
+        action="store_true",
+        help="Include unset fields in the output configuration file.",
+    )
+    parser.add_argument(
+        "--exclude-defaults",
+        action="store_true",
+        help="Exclude default values from the output configuration file.",
+    )
     return parser.parse_args()
 
 
@@ -36,4 +46,9 @@ def main() -> None:
         cfg = MMConfig.from_file(args.input_file)
         print(cfg.model_dump_json(indent=2))
     else:
-        convert_file(args.input_file, args.output_file)
+        convert_file(
+            args.input_file,
+            args.output_file,
+            exclude_unset=not args.include_unset,
+            exclude_defaults=args.exclude_defaults,
+        )
