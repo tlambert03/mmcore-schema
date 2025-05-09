@@ -22,7 +22,7 @@ See [JSON Schema here](/schemas/mmconfig/1.0/mmconfig.schema.json) for the curre
 After installing, you will have an `mmconfig` command line tool available.
 
 ```bash
-pip install mmcore-schema
+pip install git+https://github.com/tlambert03/mmcore-schema
 ```
 
 ```bash
