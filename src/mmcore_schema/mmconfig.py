@@ -301,6 +301,15 @@ class MMConfig(_Base):
             "This is used to determine how to parse the file."
         ),
     )
+    enable_parallel_device_initialization: bool | None = Field(
+        default=None,
+        description=(
+            "If True, devices will be initialized in parallel. "
+            "This is useful for speeding up the initialization of large systems."
+            "Note that this may cause issues with some devices that are not "
+            "thread-safe. (None implies no decision has been made yet.)"
+        ),
+    )
     devices: list[Device | CoreDevice] = Field(
         default_factory=list,
         description=(

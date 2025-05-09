@@ -12,6 +12,15 @@
       "default": "1.0",
       "const": "1.0"
     },
+    "enable_parallel_device_initialization": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "title": "Enable Parallel Device Initialization",
+      "description": "If True, devices will be initialized in parallel. This is useful for speeding up the initialization of large systems.Note that this may cause issues with some devices that are not thread-safe. (None implies no decision has been made yet.)",
+      "default": null
+    },
     "devices": {
       "type": "array",
       "title": "Devices",

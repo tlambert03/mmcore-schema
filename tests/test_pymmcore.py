@@ -25,6 +25,7 @@ def test_load_system_configuration() -> None:
     os.environ["PATH"] = os.pathsep.join((mm_path, os.environ["PATH"]))
     core.setDeviceAdapterSearchPaths([mm_path])
     demo_cfg = MMConfig.from_file(DEMO_CFG)
+    demo_cfg.enable_parallel_device_initialization = True
     demo_cfg.load_in_pymmcore(core)
 
     assert set(core.getLoadedDevices()) == {

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable
 
 from .mmconfig import CoreDevice
 
 if TYPE_CHECKING:
-    from collections.abc import Container, Mapping, Sequence
+    from collections.abc import Container, Iterator, Mapping, Sequence
     from typing import Protocol
 
     from mmcore_schema.mmconfig import MMConfig
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
         ) -> None: ...
         def defineStateLabel(self, device: str, state: int, label: str, /) -> None: ...
         def initializeAllDevices(self, /) -> None: ...
+        def isFeatureEnabled(self, feature: str, /) -> bool: ...
+        def enableFeature(self, feature: str, enabled: bool, /) -> None: ...
         def isConfigDefined(self, group: str, config: str, /) -> bool: ...
         def loadDevice(self, label: str, library: str, name: str, /) -> None: ...
         def setAutoFocusDevice(self, device: str, /) -> None: ...
@@ -54,6 +57,34 @@ if TYPE_CHECKING:
         def waitForSystem(self, /) -> None: ...
 
 
+@contextmanager
+def _parallel_init_enabled(core: _CoreProtocol, enable: bool | None) -> Iterator[None]:
+    """Context manager to enable or disable parallel device initialization.
+
+    Restores the previous state of the feature after exiting the context.
+
+    Parameters
+    ----------
+    core : CMMCore | CMMCorePlus
+        The core object to set the feature on.
+    enable : bool | None
+        If True, enables parallel device initialization.
+        If False, disables it.
+        If None, does nothing.
+    """
+    if enable is None:
+        yield
+        return
+
+    before = core.isFeatureEnabled("ParallelDeviceInitialization")
+    core.enableFeature("ParallelDeviceInitialization", enable)
+    try:
+        yield
+    finally:
+        # Restore the previous state of the feature
+        core.enableFeature("ParallelDeviceInitialization", before)
+
+
 def load_system_configuration(
     core: _CoreProtocol, config: MMConfig, *, exclude_devices: Container[str] = ()
 ) -> None:
@@ -78,8 +109,9 @@ def load_system_configuration(
             for prop in dev.pre_init_properties:
                 core.setProperty(dev.label, prop.property, prop.value)
 
-    # 2. Initialize all devices (if your API needs an explicit init step)
-    core.initializeAllDevices()
+    # 2. Initialize all devices
+    with _parallel_init_enabled(core, config.enable_parallel_device_initialization):
+        core.initializeAllDevices()
 
     # 3. Post-init property settings
     for dev in config.devices:
