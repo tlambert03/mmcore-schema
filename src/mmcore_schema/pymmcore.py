@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from .mmconfig import CoreDevice
 
 if TYPE_CHECKING:
-    from collections.abc import Container, Sequence
+    from collections.abc import Container, Mapping, Sequence
     from typing import Protocol
 
     from mmcore_schema.mmconfig import MMConfig
@@ -24,8 +24,8 @@ if TYPE_CHECKING:
         def initializeAllDevices(self) -> None: ...
         def isConfigDefined(self, group: str, config: str) -> bool: ...
         def loadDevice(self, label: str, library: str, name: str) -> None: ...
-        def setAutoFocusDevice(self) -> None: ...
-        def setAutoShutter(self) -> None: ...
+        def setAutoFocusDevice(self, device: str) -> None: ...
+        def setAutoShutter(self, state: bool) -> None: ...
         def setCameraDevice(self, device: str) -> None: ...
         def setChannelGroup(self, device: str) -> None: ...
         def setConfig(self, group: str, config: str) -> None: ...
@@ -42,10 +42,10 @@ if TYPE_CHECKING:
         def setProperty(
             self, label: str, propName: str, propValue: bool | float | int | str
         ) -> None: ...
-        def setShutterDevice(self) -> None: ...
-        def setSLMDevice(self) -> None: ...
-        def setTimeoutMs(self) -> None: ...
-        def setXYStageDevice(self) -> None: ...
+        def setShutterDevice(self, device: str) -> None: ...
+        def setSLMDevice(self, device: str) -> None: ...
+        def setTimeoutMs(self, device: str, timeout: float) -> None: ...
+        def setXYStageDevice(self, device: str) -> None: ...
         def unloadAllDevices(self) -> None: ...
         def updateSystemStateCache(self) -> None: ...
         def waitForSystem(self) -> None: ...
@@ -81,30 +81,25 @@ def load_system_configuration(
     # 3. Post-init property settings
     for dev in config.devices:
         if isinstance(dev, CoreDevice):
+            method_map: Mapping[str, Callable[[str], Any]] = {
+                "Camera": core.setCameraDevice,
+                "XYStage": core.setXYStageDevice,
+                "Focus": core.setFocusDevice,
+                "Shutter": core.setShutterDevice,
+                "AutoFocus": core.setAutoFocusDevice,
+                "ImageProcessor": core.setImageProcessorDevice,
+                "SLM": core.setSLMDevice,
+                "Galvo": core.setGalvoDevice,
+                "ChannelGroup": core.setChannelGroup,
+            }
             for prop in dev.properties:
-                match prop:
-                    case "Camera":
-                        core.setCameraDevice(dev.label)
-                    case "XYStage":
-                        core.setXYStageDevice(dev.label)
-                    case "Focus":
-                        core.setFocusDevice(dev.label)
-                    case "Shutter":
-                        core.setShutterDevice(dev.label)
-                    case "AutoFocus":
-                        core.setAutoFocusDevice(dev.label)
-                    case "ImageProcessor":
-                        core.setImageProcessorDevice(dev.label)
-                    case "SLM":
-                        core.setSLMDevice(dev.label)
-                    case "Galvo":
-                        core.setGalvoDevice(dev.label)
-                    case "ChannelGroup":
-                        core.setChannelGroup(dev.label)
-                    case "AutoShutter":
-                        core.setAutoShutter(dev.label)
-                    case "TimeoutMs":
-                        core.setTimeoutMs(dev.label)
+                prop_name = prop.property
+                if prop_name == "TimeoutMs":
+                    core.setTimeoutMs(dev.label, float(prop.value))
+                if prop_name == "AutoShutter":
+                    core.setAutoShutter(bool(prop.value))
+                elif method := method_map.get(prop_name):
+                    method(dev.label)
 
         elif dev.label not in exclude_devices:
             for prop in dev.post_init_properties:

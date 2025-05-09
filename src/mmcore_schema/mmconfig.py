@@ -2,14 +2,30 @@
 
 from collections.abc import Container, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, overload
+from typing import TYPE_CHECKING, Annotated, Any, Callable, ClassVar, Literal, overload
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from pydantic.main import IncEx
+    from typing_extensions import Self, TypedDict, Unpack
 
     from .pymmcore import _CoreProtocol
+
+    class DumpKwargs(TypedDict, total=False):
+        """Keyword arguments for model_dump_json/yaml."""
+
+        include: IncEx | None
+        exclude: IncEx | None
+        context: Any | None
+        by_alias: bool | None
+        exclude_unset: bool
+        exclude_defaults: bool
+        exclude_none: bool
+        round_trip: bool
+        warnings: bool | Literal["none", "warn", "error"]
+        fallback: Callable[[Any], Any] | None
+        serialize_as_any: bool
 
 
 SCHEMA_URL_BASE = "https://micro-manager.org"
@@ -370,13 +386,13 @@ class MMConfig(_Base):
                     return config
         return None
 
+    # ----------------------  VALIDATORS  ----------------------
+
     def model_post_init(self, context: Any) -> None:
         """Called after the model is initialized."""
         # always consider the schema version to be set,
         # so it will be included in the model_dump even with exclude_unset=True
         self.model_fields_set.add("schema_version")
-
-    # ----------------------  VALIDATORS  ----------------------
 
     @model_validator(mode="after")
     def _validate_model(self) -> "Self":
@@ -387,9 +403,68 @@ class MMConfig(_Base):
             raise ValueError(f"Duplicate device labels found: {', '.join(duplicates)}")
         return self
 
+    # ----------------------  I/O  ----------------------
+
+    def model_dump_yaml(
+        self, *, indent: int | None = None, **dump_kwargs: "Unpack[DumpKwargs]"
+    ) -> str:
+        """Dump the model to a YAML string."""
+        import yaml
+
+        data = self.model_dump(mode="json", **dump_kwargs)
+        return yaml.safe_dump(data, indent=indent, sort_keys=False)
+
+    def model_dump_cfg(self) -> str:
+        """Dump the model to a legacy Micro-Manager configuration string."""
+        from .conversion import iter_mm_cfg_lines
+
+        return "\n".join(iter_mm_cfg_lines(self))
+
+    def write_file(
+        self,
+        filename: str | Path,
+        indent: int | None = None,
+        **dump_kwargs: "Unpack[DumpKwargs]",
+    ) -> None:
+        """Write the configuration to a file.
+
+        Filename extension determines the format:
+        - .json: JSON
+        - .yaml or .yml: YAML
+        - .cfg: Micro-Manager legacy configuration format
+
+        Parameters
+        ----------
+        filename : str | Path
+            The name of the file to write to (see note above: .ext determines format)
+        indent : int | None
+            The number of spaces to use for indentation (only used for JSON and YAML).
+            If None, no indentation is used.
+        **dump_kwargs : Unpack[DumpKwargs]
+            Additional keyword arguments to pass to the model_dump_json or
+            model_dump_yaml methods.
+        """
+        output = Path(filename)
+        if output.suffix == ".json":
+            string = self.model_dump_json(indent=indent, **dump_kwargs)
+            output.write_text(string)
+        elif output.suffix in {".yaml", ".yml"}:
+            string = self.model_dump_yaml(indent=indent, **dump_kwargs)
+            output.write_text(string)
+        elif output.suffix == ".cfg":
+            string = self.model_dump_cfg()
+            output.write_text(string)
+        else:
+            raise NotImplementedError(
+                f"Unsupported output file format: {output.suffix}"
+            )
+
     @classmethod
     def from_file(cls, filename: str | Path) -> "MMConfig":
-        """Load a configuration file from disk."""
+        """Load a configuration file from disk.
+
+        File must be in JSON, YAML, or legacy Micro-Manager format.
+        """
         fpath = Path(filename)
         if fpath.suffix == ".cfg":
             from .conversion import read_mm_cfg_file
@@ -403,43 +478,6 @@ class MMConfig(_Base):
             data = yaml.safe_load(fpath.read_text())
             return MMConfig.model_validate(data)
         raise NotImplementedError(f"Unsupported input file format: {fpath.suffix}")
-
-    def write_file(
-        self,
-        filename: str | Path,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = True,
-        exclude_none: bool = False,
-        indent: int = 2,
-    ) -> None:
-        """Write the configuration to a file."""
-        output = Path(filename)
-        if output.suffix == ".json":
-            js = self.model_dump_json(
-                exclude_defaults=exclude_defaults,
-                indent=indent,
-                exclude_unset=exclude_unset,
-                exclude_none=exclude_none,
-            )
-            output.write_text(js)
-        elif output.suffix in {".yaml", ".yml"}:
-            data = self.model_dump(
-                exclude_defaults=exclude_defaults,
-                mode="json",
-                exclude_unset=exclude_unset,
-                exclude_none=exclude_none,
-            )
-            import yaml
-
-            output.write_text(yaml.dump(data, indent=indent))
-        elif output.suffix == ".cfg":
-            from .conversion import write_mm_cfg_file
-
-            write_mm_cfg_file(self, output)
-        else:
-            raise NotImplementedError(
-                f"Unsupported output file format: {output.suffix}"
-            )
 
     def load_in_pymmcore(
         self, core: "_CoreProtocol", *, exclude_devices: Container[str]

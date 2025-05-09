@@ -54,4 +54,19 @@ def test_config_errors() -> None:
         MMConfig(devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}])
 
     with pytest.raises(ValidationError):
-        MMConfig(devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}])
+        MMConfig(devices=[{"label": "core", "library": "DemoCamera", "name": "DCam"}])
+
+    # cannot have a device with empty label
+    with pytest.raises(ValidationError):
+        MMConfig(
+            devices=[
+                {"label": "", "library": "DemoCamera", "name": "DCam"},
+            ]
+        )
+    # cannot have a device label with commas
+    with pytest.raises(ValidationError):
+        MMConfig(
+            devices=[
+                {"label": "My,Device", "library": "DemoCamera", "name": "DCam"},
+            ]
+        )
