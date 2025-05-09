@@ -6,6 +6,11 @@ from mmcore_schema.mmconfig import MMConfig
 
 from .conversion import convert_file
 
+try:
+    from rich import print
+except ImportError:
+    pass
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for the MMCore configuration converter."""
@@ -28,11 +33,6 @@ def main() -> None:
     """Convert MMCore configuration file to a different format."""
     args = parse_args()
     if args.output_file is None:
-        try:
-            from rich import print
-        except ImportError:
-            pass
-
         cfg = MMConfig.from_file(args.input_file)
         print(cfg.model_dump_json(indent=2))
     else:
