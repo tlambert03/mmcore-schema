@@ -38,12 +38,16 @@ mmconfig MMConfig_demo.cfg new_format.json
 ## Python usage
 
 The schema is implemented in Python using [Pydantic](https://docs.pydantic.dev/),
-and the main class is `mmcore_schema.MMConfig`.
+and the main runtime object is `mmcore_schema.MMConfig`.
 
 ```python
 from mmcore_schema import MMConfig
 
+# Load a Micro-Manager configuration file (can be .cfg, .json, .yaml)
 mmconfig = MMConfig.from_file("path/to/MMConfig.cfg")
+
+# write to file (can be .cfg, .json, .yaml)
+mmconfig.write_file("path/to/new_format.json")
 ```
 
 ### Applying to a python Core
