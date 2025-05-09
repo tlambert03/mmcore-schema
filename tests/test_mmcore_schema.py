@@ -9,13 +9,10 @@ def test_config() -> None:
         devices=[
             {"label": "MyCam", "library": "DemoCamera", "name": "DCam"},
             ("Dev", "Lib", "Name"),  # this is allowed
-            {
-                "label": "Core",
-                "properties": [
-                    {"property": "TimeoutMs", "value": 1000},
-                    ("Camera", "MyCam"),  # this is allowed
-                ],
-            },
+        ],
+        startup_configuration=[
+            {"device": "Core", "property": "TimeoutMs", "value": 1000},
+            ("Core", "Camera", "MyCam"),  # this is allowed
         ],
         configuration_groups=[
             {
@@ -25,7 +22,7 @@ def test_config() -> None:
                         "name": "SomeConfig",
                         "settings": [
                             {
-                                "device_label": "Camera",
+                                "device": "Camera",
                                 "property": "PixelSize",
                                 "value": "1.0",
                             },
@@ -36,10 +33,8 @@ def test_config() -> None:
             }
         ],
     )
-    assert mm_config.core_device is not None
-    assert mm_config.system_config_group is None
-    assert mm_config.system_startup is None
-    assert mm_config.system_shutdown is None
+    assert mm_config.startup_configuration
+    assert not mm_config.shutdown_configuration
 
     my_cam = mm_config.get_device("MyCam")
     assert my_cam is not None
@@ -74,46 +69,71 @@ def test_special_groups() -> None:
             }
         ],
     )
-    assert mm_config.core_device is None
-    assert mm_config.system_config_group is not None
-    assert mm_config.system_config_group.name == "System"
-    assert mm_config.system_startup is not None
-    assert mm_config.system_startup.name == "Startup"
-    assert mm_config.system_shutdown is not None
-    assert mm_config.system_shutdown.name == "Shutdown"
+    assert mm_config.startup_configuration is not None
+    assert mm_config.shutdown_configuration is not None
 
 
 def test_config_errors() -> None:
-    # You can have a single label field, but only if it is "Core"
-    MMConfig(devices=[{"label": "Core"}])
-    with pytest.raises(ValidationError):
-        MMConfig(devices=[{"label": "AnythingButCore"}])
-
     # cannot have two devices with the same label
-    with pytest.raises(ValidationError):
-        MMConfig(devices=[{"label": "Core"}, {"label": "Core"}])
-
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="Duplicate device label"):
         MMConfig(devices=[("Dev", "Lib", "Name"), ("Dev", "Lib", "Name")])
 
-    # cannot use Core for any other device
-    with pytest.raises(ValidationError):
+    # cannot use "Core" as a device label
+    with pytest.raises(ValidationError, match="The label 'Core' is reserved"):
         MMConfig(devices=[{"label": "Core", "library": "DemoCamera", "name": "DCam"}])
-
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="The label 'Core' is reserved"):
         MMConfig(devices=[{"label": "core", "library": "DemoCamera", "name": "DCam"}])
 
     # cannot have a device with empty label
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="should have at least 1 character"):
         MMConfig(
             devices=[
                 {"label": "", "library": "DemoCamera", "name": "DCam"},
             ]
         )
     # cannot have a device label with commas
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="String should match pattern"):
         MMConfig(
             devices=[
                 {"label": "My,Device", "library": "DemoCamera", "name": "DCam"},
             ]
+        )
+
+    # These fields are mutually exclusive
+    # ("focus_direction", "state_labels", "children")
+    with pytest.raises(ValidationError, match="Only one of the following fields"):
+        MMConfig(
+            devices=[
+                {
+                    "label": "MyCam",
+                    "library": "DemoCamera",
+                    "name": "DCam",
+                    "focus_direction": 1,
+                    "state_labels": {"0": "State 0", "1": "State 1"},
+                },
+            ],
+        )
+    with pytest.raises(ValidationError, match="Only one of the following fields"):
+        MMConfig(
+            devices=[
+                {
+                    "label": "MyCam",
+                    "library": "DemoCamera",
+                    "name": "DCam",
+                    "state_labels": {"0": "State 0", "1": "State 1"},
+                    "children": ["A", "B"],
+                },
+            ],
+        )
+    with pytest.raises(ValidationError, match="Only one of the following fields"):
+        MMConfig(
+            devices=[
+                {
+                    "label": "MyCam",
+                    "library": "DemoCamera",
+                    "name": "DCam",
+                    "children": ["A", "B"],
+                    "state_labels": {"0": "State 0", "1": "State 1"},
+                },
+            ],
         )

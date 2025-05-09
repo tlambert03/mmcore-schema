@@ -23,4 +23,4 @@ def test_cli(
     __main__.main()
     captured = capsys.readouterr()
     # calling without second argument should print to stdout
-    assert bool(captured.out) is (not ext)
+    assert bool(captured.out) is bool(ext == "")

@@ -26,15 +26,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         nargs="?",
     )
+
     parser.add_argument(
-        "--include-unset",
-        action="store_true",
-        help="Include unset fields in the output configuration file.",
-    )
-    parser.add_argument(
-        "--exclude-defaults",
+        "--include-defaults",
         action="store_true",
         help="Exclude default values from the output configuration file.",
+    )
+    parser.add_argument(
+        "-i",
+        "--indent",
+        type=int,
+        default=2,
+        help="Indentation level for JSON output (default: 2).",
     )
     return parser.parse_args()
 
@@ -49,6 +52,6 @@ def main() -> None:
         convert_file(
             args.input_file,
             args.output_file,
-            exclude_unset=not args.include_unset,
-            exclude_defaults=args.exclude_defaults,
+            indent=args.indent,
+            exclude_defaults=not args.include_defaults,
         )

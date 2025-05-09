@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -10,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from .mmconfig import (
     ConfigGroup,
     Configuration,
-    CoreDevice,
     Device,
     MMConfig,
     PixelSizeConfiguration,
@@ -43,7 +43,7 @@ def convert_file(
 
 
 DELIM = ","
-CORE_DEVICE_NAME = "Core"
+CORE = "Core"
 
 
 class CfgCmd(str, Enum):
@@ -84,7 +84,7 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
     devices: dict[str, Device] = {}
     config_groups: dict[str, ConfigGroup] = {}
     pixel_size_configs: dict[str, PixelSizeConfiguration] = {}
-    core_device: CoreDevice | None = None
+    core_properties: list[PropertySetting] = []
 
     # Read file line by line
     for line in _iter_lines(file_path):
@@ -112,19 +112,19 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                 # Property,<device>,<property>,<value>
                 if len(tokens) == 2:
                     dev_label, prop = tokens
+                    value = ""
                 elif len(tokens) == 3:
                     dev_label, prop, value = tokens
                 else:
                     raise _invalid_line_error(line, {2, 3}, len(tokens))
                 # Check if this is the special initialize line
-                if dev_label == CORE_DEVICE_NAME:
-                    if prop == "Initialize":
-                        passed_init = value == "1"
+                if dev_label == CORE:
+                    if prop == "Initialize" and passed_init is False:
+                        passed_init = bool(value == "1")
                     else:
-                        if core_device is None:
-                            core_device = CoreDevice(label="Core")
-                        prop_value = PropertyValue(property=prop, value=value)
-                        core_device.properties.append(prop_value)
+                        core_properties.append(
+                            PropertySetting(device=CORE, property=prop, value=value)
+                        )
                 else:
                     device = _ensure_device(dev_label, devices)
                     prop_value = PropertyValue(property=prop, value=value)
@@ -187,11 +187,10 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                     grp.configurations.append(cfg)
 
                 cfg.settings.append(
-                    PropertySetting(device_label=dev_label, property=prop, value=value)
+                    PropertySetting(device=dev_label, property=prop, value=value)
                 )
 
             case CfgCmd.ConfigPixelSize:
-                # ConfigPixelSize,<config>,<device>,<property>,<value>
                 if len(tokens) != 4:
                     raise _invalid_line_error(line, 4, len(tokens))
 
@@ -200,7 +199,7 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                 cfg = pixel_size_configs.setdefault(
                     res_id, PixelSizeConfiguration(name=res_id)
                 )
-                s = PropertySetting(device_label=dev_label, property=prop, value=value)
+                s = PropertySetting(device=dev_label, property=prop, value=value)
                 cfg.settings.append(s)
 
             case CfgCmd.PixelSize_um:
@@ -263,12 +262,9 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                     stacklevel=2,
                 )
 
-    _devices: list = list(devices.values())
-    if core_device is not None:
-        _devices.append(core_device)
-
     config = MMConfig(
-        devices=_devices,
+        devices=list(devices.values()),
+        startup_configuration=list(core_properties),
         configuration_groups=list(config_groups.values()),
         pixel_size_configurations=list(pixel_size_configs.values()),
     )
@@ -283,71 +279,97 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
     yield ""
 
     # Reset/init marker
-    yield "# Reset"
-    yield _join(CfgCmd.Property, CORE_DEVICE_NAME, "Initialize", "0")
+    yield "# (unloadAllDevices) ========================================\n"
+    yield _join(CfgCmd.Property, CORE, "Initialize", "0")
     yield ""
 
     # Devices
-    non_core_devices = [d for d in cfg.devices if not isinstance(d, CoreDevice)]
-    yield "# Devices"
-    for device in non_core_devices:
+    yield "# Devices ===================================================\n"
+    for device in cfg.devices:
         yield _join(CfgCmd.Device, device.label, device.library, device.name)
     yield ""
 
     # Pre-init settings
-    yield "# Pre-init settings for devices"
-    for device in non_core_devices:
+    yield "# Pre-init device properties ================================\n"
+    for device in cfg.devices:
         for prop in device.pre_init_properties:
             yield _join(CfgCmd.Property, device.label, prop.property, prop.value)
     yield ""
 
     # Parent references
-    yield "# Hub (parent) references"
-    for device in non_core_devices:
+    yield "# Hub (parent) references ===================================\n"
+    for device in cfg.devices:
         for child in device.children:
             yield _join(CfgCmd.Parent, child, device.label)
     yield ""
 
     # Initialization marker for post-init
-    yield "# Initialize"
-    yield _join(CfgCmd.Property, CORE_DEVICE_NAME, "Initialize", "1")
+    yield "# (initializeAllDevices) ===================================\n"
+    yield _join(CfgCmd.Property, CORE, "Initialize", "1")
     yield ""
 
     # Post-init settings
-    for device in non_core_devices:
-        for prop in device.post_init_properties:
-            yield _join(CfgCmd.Property, device.label, prop.property, prop.value)
-    yield ""
+    if any(device.post_init_properties for device in cfg.devices):
+        yield "# Post-init settings for devices =========================\n"
+        for device in cfg.devices:
+            for prop in device.post_init_properties:
+                yield _join(CfgCmd.Property, device.label, prop.property, prop.value)
+        yield ""
 
     # Focus directions
-    yield "# Focus directions"
-    for device in non_core_devices:
-        if device.focus_direction is not None:
-            yield _join(CfgCmd.FocusDirection, device.label, device.focus_direction)
-    yield ""
+    if any(device.focus_direction is not None for device in cfg.devices):
+        yield "# Focus directions =========================================\n"
+        for device in cfg.devices:
+            if device.focus_direction is not None:
+                yield _join(CfgCmd.FocusDirection, device.label, device.focus_direction)
+        yield ""
 
     # Core properties
-    yield "# Roles"
-    if core := cfg.core_device:
-        for prop in core.properties:
-            yield _join(CfgCmd.Property, CORE_DEVICE_NAME, prop.property, prop.value)
+    yield "# Roles ====================================================\n"
+    # ... these are the only "currentX" that are written to a config file by C++/Java
+    ROLE_PROPERTIES = {"Camera", "Shutter", "Focus", "AutoShutter"}
+    for setting in cfg.startup_configuration:
+        if setting.device == CORE and setting.property in ROLE_PROPERTIES:
+            yield _join(CfgCmd.Property, CORE, setting.property, setting.value)
     yield ""
 
     # State labels
-    yield "# Labels"
-    for device in non_core_devices:
+    yield "# Labels ===================================================\n"
+    for device in cfg.devices:
         if device.state_labels:
             yield f"# {device.label}"
             for state, label in device.state_labels.items():
                 yield _join(CfgCmd.Label, device.label, state, label)
 
     # Configuration groups
-    if cfg.configuration_groups:
+    # merge in startup_configuration and shutdown_configuration into the system group
+    cfg_groups: dict[str, ConfigGroup] = {
+        grp.name: deepcopy(grp) for grp in cfg.configuration_groups
+    }
+
+    # first remove the system group, if it exists
+    # (this will only be the case if System exists, with something other than
+    # startup/shutdown)
+    sys_group = cfg_groups.pop("System", ConfigGroup(name="System"))
+    if cfg.startup_configuration:
+        sys_group.configurations.append(
+            Configuration(name="Startup", settings=cfg.startup_configuration)
+        )
+    if cfg.shutdown_configuration:
+        sys_group.configurations.append(
+            Configuration(name="Shutdown", settings=cfg.shutdown_configuration)
+        )
+    merged_groups = list(cfg_groups.values())
+    # Add the system group at the end if it has any configurations
+    if sys_group.configurations:
+        merged_groups.append(sys_group)
+
+    if merged_groups:
         yield ""
-        yield "# Configuration groups"
-    for group in cfg.configuration_groups:
+        yield "# Configuration groups ===================================="
+    for group in merged_groups:
         yield ""
-        yield f"# Group: {group.name}"
+        yield f"# Group: {group.name} --------------------------------"
         for config in group.configurations:
             yield f"# Preset: {config.name}"
             for setting in config.settings:
@@ -355,35 +377,40 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
                     CfgCmd.ConfigGroup,
                     group.name,
                     config.name,
-                    setting.device_label,
+                    setting.device,
                     setting.property,
                     setting.value,
                 )
 
     # Pixel size configurations
-    for psize in cfg.pixel_size_configurations:
+    if cfg.pixel_size_configurations:
         yield ""
-        yield f"# Resolution preset: {psize.name}"
-        for setting in psize.settings:
-            yield _join(
-                CfgCmd.ConfigPixelSize,
-                psize.name,
-                setting.device_label,
-                setting.property,
-                setting.value,
-            )
+        yield "# Pixel size settings ======================================="
+        for psize in cfg.pixel_size_configurations:
+            yield ""
+            yield f"# Resolution preset: {psize.name}"
+            for setting in psize.settings:
+                yield _join(
+                    CfgCmd.ConfigPixelSize,
+                    psize.name,
+                    setting.device,
+                    setting.property,
+                    setting.value,
+                )
 
-        # numeric and matrix settings
-        yield _join(CfgCmd.PixelSize_um, psize.name, psize.pixel_size_um)
-        if psize.affine_matrix is not None:
-            matrix_vals = DELIM.join(str(v) for v in psize.affine_matrix)
-            yield _join(CfgCmd.PixelSizeAffine, psize.name, matrix_vals)
-        if psize.dxdz is not None:
-            yield _join(CfgCmd.PixelSizeAngle_dxdz, psize.name, psize.dxdz)
-        if psize.dydz is not None:
-            yield _join(CfgCmd.PixelSizeAngle_dydz, psize.name, psize.dydz)
-        if psize.optimal_z_um is not None:
-            yield _join(CfgCmd.PixelSizeOptimalZ_Um, psize.name, psize.optimal_z_um)
+            # numeric and matrix settings
+            yield _join(CfgCmd.PixelSize_um, psize.name, psize.pixel_size_um)
+            if psize.affine_matrix is not None:
+                matrix_vals = DELIM.join(str(v) for v in psize.affine_matrix)
+                yield _join(CfgCmd.PixelSizeAffine, psize.name, matrix_vals)
+            if psize.dxdz is not None:
+                yield _join(CfgCmd.PixelSizeAngle_dxdz, psize.name, psize.dxdz)
+            if psize.dydz is not None:
+                yield _join(CfgCmd.PixelSizeAngle_dydz, psize.name, psize.dydz)
+            if psize.optimal_z_um is not None:
+                yield _join(CfgCmd.PixelSizeOptimalZ_Um, psize.name, psize.optimal_z_um)
+
+    yield ""  # newline at the end of the file
 
 
 # --------------- helpers -----------------
@@ -424,7 +451,8 @@ def _iter_lines(file_path: str | Path) -> Iterator[str]:
     """Iterate over lines in a file, stripping whitespace and skipping comments."""
     with open(file_path) as f:
         for line in f:
-            line = line.strip()
+            # remove everything after the first # and strip whitespace
+            line = line.split("#", 1)[0].strip()
             if not line or line.startswith("#") or line.startswith("//"):
                 continue
             yield line

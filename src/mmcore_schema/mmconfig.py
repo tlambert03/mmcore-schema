@@ -2,15 +2,7 @@
 
 from collections.abc import Container
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Annotated,
-    Any,
-    Callable,
-    ClassVar,
-    Literal,
-    overload,
-)
+from typing import TYPE_CHECKING, Annotated, Any, Callable, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,16 +31,16 @@ if TYPE_CHECKING:
 SCHEMA_URL_BASE = "https://micro-manager.org"
 
 
-class _Base(BaseModel):
+class _BaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(
         extra="forbid", coerce_numbers_to_str=True
     )
 
 
-class PropertyValue(_Base):
+class PropertyValue(_BaseModel):
     """A value associated with a property.
 
-    Note that `device_label` is not specified here, as this object is always a member
+    Note that `device` is not specified here, as this object is always a member
     of a properties list on a specific device.
     """
 
@@ -74,7 +66,7 @@ DeviceLabel = Annotated[
     str,
     Field(
         description=(
-            "The user-determined label to assign to the device."
+            "A user-determined label, assigned when loading a device."
             "Must have at least one character, no commas, and cannot be 'Core'."
         ),
         pattern="^[^,]+$",
@@ -84,7 +76,7 @@ DeviceLabel = Annotated[
 ]
 
 
-class Device(_Base):
+class Device(_BaseModel):
     """A device to load from a library."""
 
     label: DeviceLabel
@@ -144,44 +136,57 @@ class Device(_Base):
         description=("List of child device labels (only applicable for Hub Devices)."),
     )
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        json_schema_extra={
+            "additionalProperties": False,
+            "not": {
+                "anyOf": [
+                    {"required": ["focus_direction", "state_labels"]},
+                    {"required": ["focus_direction", "children"]},
+                    {"required": ["state_labels", "children"]},
+                ]
+            },
+        },
+    )
+
     @model_validator(mode="before")
     @classmethod
-    def _cast_sequence(cls, value: Any) -> Any:
+    def _model_validate_before(cls, value: Any) -> Any:
         """Allow a sequence of 3 items to be passed as (label, library, name)."""
         if isinstance(value, (list, tuple)) and len(value) == 3:
             return {"label": value[0], "library": value[1], "name": value[2]}
         return value
 
+    @model_validator(mode="after")
+    def _model_validate_after(self) -> "Self":
+        """Allow a sequence of 3 items to be passed as (label, library, name)."""
+        # ensure that no two mutually exclusive fields are set
+        modified = 0
+        exclusive_fields = ("focus_direction", "state_labels", "children")
+        for field_name in exclusive_fields:
+            field = type(self).model_fields[field_name]
+            default = field.get_default(call_default_factory=True, validated_data={})
+            modified += int(getattr(self, field_name) != default)
+        if modified > 1:
+            raise ValueError(
+                "Only one of the following fields may be set: "
+                f"{', '.join(exclusive_fields)}"
+            )
+        return self
+
     @field_validator("label", mode="after")
     def _check_label(cls, v: str) -> str:
         if v.lower() == "core":
             raise ValueError(
-                "The label 'Core' is reserved for the Micro-Manager core device."
+                "The label 'Core' is reserved for the Micro-Manager Core device."
             )
         return v
 
 
-class CoreDevice(_Base):
-    """Special device representing the Micro-Manager core."""
-
-    label: Literal["Core"] = Field(
-        default=...,
-        description=("Label MUST be 'Core', and must be provided."),
-        repr=False,
-    )
-    properties: list[PropertyValue] = Field(
-        default_factory=list,
-        description=(
-            "List of properties to set on the Core device. "
-            "Properties will be set in the order they are listed."
-        ),
-    )
-
-
-class PropertySetting(_Base):
+class PropertySetting(_BaseModel):
     """A single device property setting."""
 
-    device_label: str = Field(
+    device: str = Field(
         default=...,
         description="The label of the device to set the configuration on",
     )
@@ -194,20 +199,20 @@ class PropertySetting(_Base):
         description="The value to set for the property on the device",
     )
 
+    def as_tuple(self) -> tuple[str, str, str]:
+        """Return the setting as a tuple of (device, property, value)."""
+        return self.device, self.property, self.value
+
     @model_validator(mode="before")
     @classmethod
     def _cast_sequence(cls, value: Any) -> Any:
         """Allow a sequence of 3 items to be passed as (dev_label, prop_name, value)."""
         if isinstance(value, (list, tuple)) and len(value) == 3:
-            return {
-                "device_label": value[0],
-                "property": value[1],
-                "value": value[2],
-            }
+            return {"device": value[0], "property": value[1], "value": value[2]}
         return value
 
 
-class Configuration(_Base):
+class Configuration(_BaseModel):
     """A group of device property settings."""
 
     name: str = Field(
@@ -223,12 +228,12 @@ class Configuration(_Base):
     )
 
 
-class ConfigGroup(_Base):
+class ConfigGroup(_BaseModel):
     """A group of configuration presets."""
 
     name: str = Field(
         default=...,
-        description="The name of the configuration group.",
+        description="The name of the configuration group. May NOT be 'System'.",
     )
     configurations: list[Configuration] = Field(
         default_factory=list, description=("Configuration settings for the group. ")
@@ -285,17 +290,19 @@ class PixelSizeConfiguration(Configuration):
     )
 
 
-class MMConfig(_Base):
+class MMConfig(_BaseModel):
     """Micro-Manager configuration file schema."""
 
     # ----------------------  FIELDS  ----------------------
 
     schema_version: Literal["1.0"] = Field(
-        default="1.0",
+        default=None,  # type: ignore  # (See model_post_init)
         description=(
             "The version of the schema used to create this file. "
             "This is used to determine how to parse the file."
         ),
+        init=False,
+        frozen=True,
     )
     enable_parallel_device_initialization: bool | None = Field(
         default=None,
@@ -306,13 +313,28 @@ class MMConfig(_Base):
             "thread-safe. (None implies no decision has been made yet.)"
         ),
     )
-    devices: list[Device | CoreDevice] = Field(
+    devices: list[Device] = Field(
         default_factory=list,
         description=(
             "List of devices to load. "
             "Devices will be loaded in the order they are listed."
         ),
     )
+    startup_configuration: list[PropertySetting] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device after device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
+    )
+    shutdown_configuration: list[PropertySetting] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device after device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
+    )
+
     configuration_groups: list[ConfigGroup] = Field(
         default_factory=list,
         description=("Configuration groups to create."),
@@ -341,11 +363,7 @@ class MMConfig(_Base):
 
     # -----------------  Special Values and Conveniences  ----------------------
 
-    @overload
-    def get_device(self, label: Literal["Core"]) -> CoreDevice | None: ...  # type: ignore[overload-overlap]
-    @overload
-    def get_device(self, label: str) -> Device | None: ...
-    def get_device(self, label: str) -> Device | CoreDevice | None:
+    def get_device(self, label: str) -> Device | None:
         """Return the device with the given label, if it exists."""
         for device in self.devices:
             if device.label == label:
@@ -359,55 +377,45 @@ class MMConfig(_Base):
                 return group
         return None
 
-    @property
-    def core_device(self) -> CoreDevice | None:
-        """Return the core device, if it exists."""
-        for device in self.devices:
-            if isinstance(device, CoreDevice):
-                return device
-        return None
-
-    @property
-    def system_config_group(self) -> ConfigGroup | None:
-        """Return the system configuration group, if it exists."""
-        for group in self.configuration_groups:
-            if group.name == "System":
-                return group
-        return None
-
-    @property
-    def system_startup(self) -> Configuration | None:
-        """Return the system startup configuration, if it exists."""
-        if grp := self.system_config_group:
-            for config in grp.configurations:
-                if config.name == "Startup":
-                    return config
-        return None
-
-    @property
-    def system_shutdown(self) -> Configuration | None:
-        """Return the system shutdown configuration, if it exists."""
-        if grp := self.system_config_group:
-            for config in grp.configurations:
-                if config.name == "Shutdown":
-                    return config
-        return None
-
     # ----------------------  VALIDATORS  ----------------------
 
     def model_post_init(self, context: Any) -> None:
         """Called after the model is initialized."""
-        # always consider the schema version to be set,
-        # so it will be included in the model_dump even with exclude_unset=True
+        # this is a little hack to ensure that schema_version is considered "set"
+        # and also considered not the default, so that it is included in the JSON output
+        # even when exclude_defaults or exclude_unset are set to True.
+        # there might be a better way to do this.
+        object.__setattr__(self, "schema_version", "1.0")
         self.model_fields_set.add("schema_version")
 
     @model_validator(mode="after")
     def _validate_model(self) -> "Self":
         """Perform post-validation checks on the model."""
+        # Check for duplicate device labels
         device_names = [d.label for d in self.devices]
         if len(device_names) != len(set(device_names)):
             duplicates = {name for name in device_names if device_names.count(name) > 1}
             raise ValueError(f"Duplicate device labels found: {', '.join(duplicates)}")
+
+        # move System/Start and System/Shutdown from configuration_groups
+        # to startup_configuration and shutdown_configuration
+        for group in self.configuration_groups:
+            if group.name == "System":
+                for config in list(group.configurations):
+                    if config.name == "Startup":
+                        self.startup_configuration = _merge_settings(
+                            self.startup_configuration, config.settings
+                        )
+                        group.configurations.remove(config)
+                    elif config.name == "Shutdown":
+                        self.shutdown_configuration = _merge_settings(
+                            self.shutdown_configuration, config.settings
+                        )
+                        group.configurations.remove(config)
+                # if we're left with no configurations, remove the group entirely
+                if not group.configurations:
+                    self.configuration_groups.remove(group)
+
         return self
 
     # ----------------------  I/O  ----------------------
@@ -453,18 +461,16 @@ class MMConfig(_Base):
         """
         output = Path(filename)
         if output.suffix == ".json":
-            string = self.model_dump_json(indent=indent, **dump_kwargs)
-            output.write_text(string)
+            string = self.model_dump_json(indent=indent, **dump_kwargs) + "\n"
         elif output.suffix in {".yaml", ".yml"}:
             string = self.model_dump_yaml(indent=indent, **dump_kwargs)
-            output.write_text(string)
         elif output.suffix == ".cfg":
             string = self.model_dump_cfg()
-            output.write_text(string)
         else:
             raise NotImplementedError(
                 f"Unsupported output file format: {output.suffix}"
             )
+        output.write_text(string, encoding="utf-8")
 
     @classmethod
     def from_file(cls, filename: str | Path) -> "MMConfig":
@@ -493,3 +499,16 @@ class MMConfig(_Base):
         from .pymmcore import load_system_configuration
 
         load_system_configuration(core, self, exclude_devices=exclude_devices)
+
+
+def _merge_settings(
+    target: list[PropertySetting], source: list[PropertySetting]
+) -> list[PropertySetting]:
+    """Merge settings from source into target, avoiding duplicates.
+
+    In case of duplicates, the source setting will overwrite the target setting.
+    """
+    output = {setting.as_tuple()[:2]: setting for setting in target}
+    for setting in source:
+        output[setting.as_tuple()[:2]] = setting
+    return list(output.values())

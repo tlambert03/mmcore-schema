@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import sys
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Callable
-
-from .mmconfig import CoreDevice
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Container, Iterator, Mapping, Sequence
+    from collections.abc import Container, Iterator, Sequence
     from typing import Protocol
 
     from mmcore_schema.mmconfig import MMConfig
 
     # defining a protocol, so as to support pymmcore-nano as well as pymmcore
     class _CoreProtocol(Protocol):
+        def isGroupDefined(self, group: str, /) -> bool: ...
         def defineConfigGroup(self, group: str, /) -> None: ...
         def defineConfig(
             self, group: str, config: str, device: str, prop: str, value: str
@@ -105,10 +104,9 @@ def load_system_configuration(
 
     # 1. Load devices & their per-device settings (delay, focus, state labels)
     for dev in config.devices:
-        if not isinstance(dev, CoreDevice):
-            core.loadDevice(dev.label, dev.library, dev.name)
-            for prop in dev.pre_init_properties:
-                core.setProperty(dev.label, prop.property, prop.value)
+        core.loadDevice(dev.label, dev.library, dev.name)
+        for prop in dev.pre_init_properties:
+            core.setProperty(dev.label, prop.property, prop.value)
 
     # 2. Initialize all devices
     with _parallel_init_enabled(core, config.enable_parallel_device_initialization):
@@ -116,28 +114,7 @@ def load_system_configuration(
 
     # 3. Post-init property settings
     for dev in config.devices:
-        if isinstance(dev, CoreDevice):
-            method_map: Mapping[str, Callable[[str], Any]] = {
-                "Camera": core.setCameraDevice,
-                "XYStage": core.setXYStageDevice,
-                "Focus": core.setFocusDevice,
-                "Shutter": core.setShutterDevice,
-                "AutoFocus": core.setAutoFocusDevice,
-                "ImageProcessor": core.setImageProcessorDevice,
-                "SLM": core.setSLMDevice,
-                "Galvo": core.setGalvoDevice,
-                "ChannelGroup": core.setChannelGroup,
-            }
-            for prop in dev.properties:
-                prop_name = prop.property
-                if prop_name == "TimeoutMs":
-                    core.setTimeoutMs(int(prop.value))
-                if prop_name == "AutoShutter":
-                    core.setAutoShutter(bool(prop.value))
-                elif method := method_map.get(prop_name):
-                    method(prop.value)
-
-        elif dev.label not in exclude_devices:
+        if dev.label not in exclude_devices:
             for prop in dev.post_init_properties:
                 core.setProperty(dev.label, prop.property, prop.value)
             if dev.delay_ms is not None:
@@ -149,25 +126,38 @@ def load_system_configuration(
                     core.defineStateLabel(dev.label, int(state), lbl)
 
     # 4. Configuration groups
+    # Special case: "System" Configuration group
+    if startup := config.startup_configuration:
+        if not core.isGroupDefined("System"):
+            core.defineConfigGroup("System")
+        for s in startup:
+            if s.device not in exclude_devices:
+                core.defineConfig("System", "Startup", s.device, s.property, s.value)
+    if shutdown := config.shutdown_configuration:
+        if not core.isGroupDefined("System"):
+            core.defineConfigGroup("System")
+        for s in shutdown:
+            if s.device not in exclude_devices:
+                core.defineConfig("System", "Shutdown", s.device, s.property, s.value)
+
     for group in config.configuration_groups:
         # this line is actually needed when using pure pymmcore
         # to trigger `updateAllowedChannelGroups`.
-        core.defineConfigGroup(group.name)
+        if not core.isGroupDefined(group.name):
+            core.defineConfigGroup(group.name)
 
         for conf in group.configurations:
             for s in conf.settings:
-                if s.device_label not in exclude_devices:
+                if s.device not in exclude_devices:
                     core.defineConfig(
-                        group.name, conf.name, s.device_label, s.property, s.value
+                        group.name, conf.name, s.device, s.property, s.value
                     )
 
     # 5. Pixel-size configurations
     for pix in config.pixel_size_configurations:
         for s in pix.settings:
-            if s.device_label not in exclude_devices:
-                core.definePixelSizeConfig(
-                    pix.name, s.device_label, s.property, s.value
-                )
+            if s.device not in exclude_devices:
+                core.definePixelSizeConfig(pix.name, s.device, s.property, s.value)
         if pix.pixel_size_um is not None:
             core.setPixelSizeUm(pix.name, pix.pixel_size_um)
         if pix.affine_matrix:
