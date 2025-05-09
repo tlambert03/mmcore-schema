@@ -2,15 +2,7 @@
 
 from collections.abc import Container
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Annotated,
-    Any,
-    Callable,
-    ClassVar,
-    Literal,
-    overload,
-)
+from typing import TYPE_CHECKING, Annotated, Any, Callable, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,13 +31,13 @@ if TYPE_CHECKING:
 SCHEMA_URL_BASE = "https://micro-manager.org"
 
 
-class _Base(BaseModel):
+class _BaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(
         extra="forbid", coerce_numbers_to_str=True
     )
 
 
-class PropertyValue(_Base):
+class PropertyValue(_BaseModel):
     """A value associated with a property.
 
     Note that `device_label` is not specified here, as this object is always a member
@@ -74,7 +66,7 @@ DeviceLabel = Annotated[
     str,
     Field(
         description=(
-            "The user-determined label to assign to the device."
+            "A user-determined label, assigned when loading a device."
             "Must have at least one character, no commas, and cannot be 'Core'."
         ),
         pattern="^[^,]+$",
@@ -84,7 +76,7 @@ DeviceLabel = Annotated[
 ]
 
 
-class Device(_Base):
+class Device(_BaseModel):
     """A device to load from a library."""
 
     label: DeviceLabel
@@ -144,41 +136,54 @@ class Device(_Base):
         description=("List of child device labels (only applicable for Hub Devices)."),
     )
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        json_schema_extra={
+            "additionalProperties": False,
+            "not": {
+                "anyOf": [
+                    {"required": ["focus_direction", "state_labels"]},
+                    {"required": ["focus_direction", "children"]},
+                    {"required": ["state_labels", "children"]},
+                ]
+            },
+        },
+    )
+
     @model_validator(mode="before")
     @classmethod
-    def _cast_sequence(cls, value: Any) -> Any:
+    def _model_validate_before(cls, value: Any) -> Any:
         """Allow a sequence of 3 items to be passed as (label, library, name)."""
         if isinstance(value, (list, tuple)) and len(value) == 3:
             return {"label": value[0], "library": value[1], "name": value[2]}
         return value
 
+    @model_validator(mode="after")
+    def _model_validate_after(self) -> "Self":
+        """Allow a sequence of 3 items to be passed as (label, library, name)."""
+        # ensure that no two mutually exclusive fields are set
+        modified = 0
+        exclusive_fields = ("focus_direction", "state_labels", "children")
+        for field_name in exclusive_fields:
+            field = type(self).model_fields[field_name]
+            default = field.get_default(call_default_factory=True, validated_data={})
+            modified += int(getattr(self, field_name) != default)
+        if modified > 1:
+            raise ValueError(
+                "Only one of the following fields may be set: "
+                f"{', '.join(exclusive_fields)}"
+            )
+        return self
+
     @field_validator("label", mode="after")
     def _check_label(cls, v: str) -> str:
         if v.lower() == "core":
             raise ValueError(
-                "The label 'Core' is reserved for the Micro-Manager core device."
+                "The label 'Core' is reserved for the Micro-Manager Core device."
             )
         return v
 
 
-class CoreDevice(_Base):
-    """Special device representing the Micro-Manager core."""
-
-    label: Literal["Core"] = Field(
-        default=...,
-        description=("Label MUST be 'Core', and must be provided."),
-        repr=False,
-    )
-    properties: list[PropertyValue] = Field(
-        default_factory=list,
-        description=(
-            "List of properties to set on the Core device. "
-            "Properties will be set in the order they are listed."
-        ),
-    )
-
-
-class PropertySetting(_Base):
+class PropertySetting(_BaseModel):
     """A single device property setting."""
 
     device_label: str = Field(
@@ -207,7 +212,7 @@ class PropertySetting(_Base):
         return value
 
 
-class Configuration(_Base):
+class Configuration(_BaseModel):
     """A group of device property settings."""
 
     name: str = Field(
@@ -223,12 +228,12 @@ class Configuration(_Base):
     )
 
 
-class ConfigGroup(_Base):
+class ConfigGroup(_BaseModel):
     """A group of configuration presets."""
 
     name: str = Field(
         default=...,
-        description="The name of the configuration group.",
+        description="The name of the configuration group. May NOT be 'System'.",
     )
     configurations: list[Configuration] = Field(
         default_factory=list, description=("Configuration settings for the group. ")
@@ -285,7 +290,7 @@ class PixelSizeConfiguration(Configuration):
     )
 
 
-class MMConfig(_Base):
+class MMConfig(_BaseModel):
     """Micro-Manager configuration file schema."""
 
     # ----------------------  FIELDS  ----------------------
@@ -306,13 +311,28 @@ class MMConfig(_Base):
             "thread-safe. (None implies no decision has been made yet.)"
         ),
     )
-    devices: list[Device | CoreDevice] = Field(
+    devices: list[Device] = Field(
         default_factory=list,
         description=(
             "List of devices to load. "
             "Devices will be loaded in the order they are listed."
         ),
     )
+    startup_configuration: list[PropertySetting] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device after device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
+    )
+    shutdown_configuration: list[PropertySetting] = Field(
+        default_factory=list,
+        description=(
+            "List of properties to set on the device after device initialization. "
+            "Properties will be set in the order they are listed."
+        ),
+    )
+
     configuration_groups: list[ConfigGroup] = Field(
         default_factory=list,
         description=("Configuration groups to create."),
@@ -341,11 +361,7 @@ class MMConfig(_Base):
 
     # -----------------  Special Values and Conveniences  ----------------------
 
-    @overload
-    def get_device(self, label: Literal["Core"]) -> CoreDevice | None: ...  # type: ignore[overload-overlap]
-    @overload
-    def get_device(self, label: str) -> Device | None: ...
-    def get_device(self, label: str) -> Device | CoreDevice | None:
+    def get_device(self, label: str) -> Device | None:
         """Return the device with the given label, if it exists."""
         for device in self.devices:
             if device.label == label:
@@ -357,40 +373,6 @@ class MMConfig(_Base):
         for group in self.configuration_groups:
             if group.name == name:
                 return group
-        return None
-
-    @property
-    def core_device(self) -> CoreDevice | None:
-        """Return the core device, if it exists."""
-        for device in self.devices:
-            if isinstance(device, CoreDevice):
-                return device
-        return None
-
-    @property
-    def system_config_group(self) -> ConfigGroup | None:
-        """Return the system configuration group, if it exists."""
-        for group in self.configuration_groups:
-            if group.name == "System":
-                return group
-        return None
-
-    @property
-    def system_startup(self) -> Configuration | None:
-        """Return the system startup configuration, if it exists."""
-        if grp := self.system_config_group:
-            for config in grp.configurations:
-                if config.name == "Startup":
-                    return config
-        return None
-
-    @property
-    def system_shutdown(self) -> Configuration | None:
-        """Return the system shutdown configuration, if it exists."""
-        if grp := self.system_config_group:
-            for config in grp.configurations:
-                if config.name == "Shutdown":
-                    return config
         return None
 
     # ----------------------  VALIDATORS  ----------------------

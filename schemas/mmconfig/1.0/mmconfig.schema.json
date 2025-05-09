@@ -26,14 +26,23 @@
       "title": "Devices",
       "description": "List of devices to load. Devices will be loaded in the order they are listed.",
       "items": {
-        "anyOf": [
-          {
-            "$ref": "#/$defs/Device"
-          },
-          {
-            "$ref": "#/$defs/CoreDevice"
-          }
-        ]
+        "$ref": "#/$defs/Device"
+      }
+    },
+    "startup_configuration": {
+      "type": "array",
+      "title": "Startup Configuration",
+      "description": "List of properties to set on the device after device initialization. Properties will be set in the order they are listed.",
+      "items": {
+        "$ref": "#/$defs/PropertySetting"
+      }
+    },
+    "shutdown_configuration": {
+      "type": "array",
+      "title": "Shutdown Configuration",
+      "description": "List of properties to set on the device after device initialization. Properties will be set in the order they are listed.",
+      "items": {
+        "$ref": "#/$defs/PropertySetting"
       }
     },
     "configuration_groups": {
@@ -83,6 +92,34 @@
       ],
       "additionalProperties": false
     },
+    "PropertySetting": {
+      "type": "object",
+      "title": "PropertySetting",
+      "description": "A single device property setting.",
+      "properties": {
+        "device_label": {
+          "type": "string",
+          "title": "Device Label",
+          "description": "The label of the device to set the configuration on"
+        },
+        "property": {
+          "type": "string",
+          "title": "Property",
+          "description": "The name of the property to set on the device"
+        },
+        "value": {
+          "type": "string",
+          "title": "Value",
+          "description": "The value to set for the property on the device"
+        }
+      },
+      "required": [
+        "device_label",
+        "property",
+        "value"
+      ],
+      "additionalProperties": false
+    },
     "Device": {
       "type": "object",
       "title": "Device",
@@ -91,7 +128,7 @@
         "label": {
           "type": "string",
           "title": "Label",
-          "description": "The user-determined label to assign to the device.Must have at least one character, no commas, and cannot be 'Core'.",
+          "description": "A user-determined label, assigned when loading a device.Must have at least one character, no commas, and cannot be 'Core'.",
           "not": {
             "pattern": "^(?i)core$"
           },
@@ -156,7 +193,7 @@
           "description": "List of child device labels (only applicable for Hub Devices).",
           "items": {
             "type": "string",
-            "description": "The user-determined label to assign to the device.Must have at least one character, no commas, and cannot be 'Core'.",
+            "description": "A user-determined label, assigned when loading a device.Must have at least one character, no commas, and cannot be 'Core'.",
             "not": {
               "pattern": "^(?i)core$"
             },
@@ -170,60 +207,29 @@
         "library",
         "name"
       ],
-      "additionalProperties": false
-    },
-    "CoreDevice": {
-      "type": "object",
-      "title": "CoreDevice",
-      "description": "Special device representing the Micro-Manager core.",
-      "properties": {
-        "label": {
-          "type": "string",
-          "title": "Label",
-          "description": "Label MUST be 'Core', and must be provided.",
-          "const": "Core"
-        },
-        "properties": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PropertyValue"
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "focus_direction",
+              "state_labels"
+            ]
           },
-          "description": "List of properties to set on the Core device. Properties will be set in the order they are listed.",
-          "title": "Properties"
-        }
-      },
-      "required": [
-        "label"
-      ],
-      "additionalProperties": false
-    },
-    "PropertySetting": {
-      "type": "object",
-      "title": "PropertySetting",
-      "description": "A single device property setting.",
-      "properties": {
-        "device_label": {
-          "type": "string",
-          "title": "Device Label",
-          "description": "The label of the device to set the configuration on"
-        },
-        "property": {
-          "type": "string",
-          "title": "Property",
-          "description": "The name of the property to set on the device"
-        },
-        "value": {
-          "type": "string",
-          "title": "Value",
-          "description": "The value to set for the property on the device"
-        }
-      },
-      "required": [
-        "device_label",
-        "property",
-        "value"
-      ],
-      "additionalProperties": false
+          {
+            "required": [
+              "focus_direction",
+              "children"
+            ]
+          },
+          {
+            "required": [
+              "state_labels",
+              "children"
+            ]
+          }
+        ]
+      }
     },
     "Configuration": {
       "type": "object",
@@ -257,7 +263,7 @@
         "name": {
           "type": "string",
           "title": "Name",
-          "description": "The name of the configuration group."
+          "description": "The name of the configuration group. May NOT be 'System'."
         },
         "configurations": {
           "type": "array",

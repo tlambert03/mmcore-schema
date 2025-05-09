@@ -36,6 +36,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exclude default values from the output configuration file.",
     )
+    parser.add_argument(
+        "-i",
+        "--indent",
+        type=int,
+        default=2,
+        help="Indentation level for JSON output (default: 2).",
+    )
     return parser.parse_args()
 
 
@@ -49,6 +56,7 @@ def main() -> None:
         convert_file(
             args.input_file,
             args.output_file,
+            indent=args.indent,
             exclude_unset=not args.include_unset,
             exclude_defaults=args.exclude_defaults,
         )

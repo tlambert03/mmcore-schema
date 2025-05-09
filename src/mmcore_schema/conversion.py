@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from .mmconfig import (
     ConfigGroup,
     Configuration,
-    CoreDevice,
     Device,
     MMConfig,
     PixelSizeConfiguration,
@@ -43,7 +42,7 @@ def convert_file(
 
 
 DELIM = ","
-CORE_DEVICE_NAME = "Core"
+CORE = "Core"
 
 
 class CfgCmd(str, Enum):
@@ -84,7 +83,7 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
     devices: dict[str, Device] = {}
     config_groups: dict[str, ConfigGroup] = {}
     pixel_size_configs: dict[str, PixelSizeConfiguration] = {}
-    core_device: CoreDevice | None = None
+    core_properties: list[PropertySetting] = []
 
     # Read file line by line
     for line in _iter_lines(file_path):
@@ -112,19 +111,21 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                 # Property,<device>,<property>,<value>
                 if len(tokens) == 2:
                     dev_label, prop = tokens
+                    value = ""
                 elif len(tokens) == 3:
                     dev_label, prop, value = tokens
                 else:
                     raise _invalid_line_error(line, {2, 3}, len(tokens))
                 # Check if this is the special initialize line
-                if dev_label == CORE_DEVICE_NAME:
-                    if prop == "Initialize":
-                        passed_init = value == "1"
+                if dev_label == CORE:
+                    if prop == "Initialize" and passed_init is False:
+                        passed_init = bool(value == "1")
                     else:
-                        if core_device is None:
-                            core_device = CoreDevice(label="Core")
-                        prop_value = PropertyValue(property=prop, value=value)
-                        core_device.properties.append(prop_value)
+                        core_properties.append(
+                            PropertySetting(
+                                device_label=CORE, property=prop, value=value
+                            )
+                        )
                 else:
                     device = _ensure_device(dev_label, devices)
                     prop_value = PropertyValue(property=prop, value=value)
@@ -191,7 +192,6 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                 )
 
             case CfgCmd.ConfigPixelSize:
-                # ConfigPixelSize,<config>,<device>,<property>,<value>
                 if len(tokens) != 4:
                     raise _invalid_line_error(line, 4, len(tokens))
 
@@ -263,12 +263,9 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                     stacklevel=2,
                 )
 
-    _devices: list = list(devices.values())
-    if core_device is not None:
-        _devices.append(core_device)
-
     config = MMConfig(
-        devices=_devices,
+        devices=list(devices.values()),
+        startup_configuration=list(core_properties),
         configuration_groups=list(config_groups.values()),
         pixel_size_configurations=list(pixel_size_configs.values()),
     )
@@ -284,58 +281,61 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
 
     # Reset/init marker
     yield "# Reset"
-    yield _join(CfgCmd.Property, CORE_DEVICE_NAME, "Initialize", "0")
+    yield _join(CfgCmd.Property, CORE, "Initialize", "0")
     yield ""
 
     # Devices
-    non_core_devices = [d for d in cfg.devices if not isinstance(d, CoreDevice)]
     yield "# Devices"
-    for device in non_core_devices:
+    for device in cfg.devices:
         yield _join(CfgCmd.Device, device.label, device.library, device.name)
     yield ""
 
     # Pre-init settings
     yield "# Pre-init settings for devices"
-    for device in non_core_devices:
+    for device in cfg.devices:
         for prop in device.pre_init_properties:
             yield _join(CfgCmd.Property, device.label, prop.property, prop.value)
     yield ""
 
     # Parent references
     yield "# Hub (parent) references"
-    for device in non_core_devices:
+    for device in cfg.devices:
         for child in device.children:
             yield _join(CfgCmd.Parent, child, device.label)
     yield ""
 
     # Initialization marker for post-init
     yield "# Initialize"
-    yield _join(CfgCmd.Property, CORE_DEVICE_NAME, "Initialize", "1")
+    yield _join(CfgCmd.Property, CORE, "Initialize", "1")
     yield ""
 
     # Post-init settings
-    for device in non_core_devices:
+    for device in cfg.devices:
         for prop in device.post_init_properties:
             yield _join(CfgCmd.Property, device.label, prop.property, prop.value)
     yield ""
 
     # Focus directions
     yield "# Focus directions"
-    for device in non_core_devices:
+    for device in cfg.devices:
         if device.focus_direction is not None:
             yield _join(CfgCmd.FocusDirection, device.label, device.focus_direction)
     yield ""
 
     # Core properties
+    # ... these seem to be the only "currentX" that are written to a config file
+    # (and CMMCore::saveSystemConfiguration does not write AutoShutter)
+    ROLE_PROPERTIES = {"Camera", "Shutter", "Focus", "AutoShutter"}
     yield "# Roles"
-    if core := cfg.core_device:
-        for prop in core.properties:
-            yield _join(CfgCmd.Property, CORE_DEVICE_NAME, prop.property, prop.value)
+    for setting in cfg.startup_configuration:
+        if setting.device_label == CORE:
+            if setting.property in ROLE_PROPERTIES:
+                yield _join(CfgCmd.Property, CORE, prop.property, prop.value)
     yield ""
 
     # State labels
     yield "# Labels"
-    for device in non_core_devices:
+    for device in cfg.devices:
         if device.state_labels:
             yield f"# {device.label}"
             for state, label in device.state_labels.items():
