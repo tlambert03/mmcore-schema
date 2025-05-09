@@ -5,18 +5,24 @@ from mmcore_schema import MMConfig
 
 
 def test_config() -> None:
-    cfg = MMConfig(
+    mm_config = MMConfig(
         devices=[
-            {"label": "MyDevice", "library": "DemoCamera", "name": "DCam"},
+            {"label": "MyCam", "library": "DemoCamera", "name": "DCam"},
             ("Dev", "Lib", "Name"),  # this is allowed
-            {"label": "Core"},
+            {
+                "label": "Core",
+                "properties": [
+                    {"property": "TimeoutMs", "value": 1000},
+                    ("Camera", "MyCam"),  # this is allowed
+                ],
+            },
         ],
         configuration_groups=[
             {
-                "name": "Default",
+                "name": "SomeGroup",
                 "configurations": [
                     {
-                        "name": "Default",
+                        "name": "SomeConfig",
                         "settings": [
                             {
                                 "device_label": "Camera",
@@ -30,10 +36,51 @@ def test_config() -> None:
             }
         ],
     )
+    assert mm_config.core_device is not None
+    assert mm_config.system_config_group is None
+    assert mm_config.system_startup is None
+    assert mm_config.system_shutdown is None
+
+    my_cam = mm_config.get_device("MyCam")
+    assert my_cam is not None
+    assert my_cam.label == "MyCam"
+    assert mm_config.get_device("NotMyCam") is None
+
+    cfg_grp = mm_config.get_configuration_group("SomeGroup")
+    assert cfg_grp is not None
+    assert mm_config.get_configuration_group("NotSomeGroup") is None
+
+    cfg = cfg_grp.get_configuration("SomeConfig")
+    assert cfg is not None
+    assert cfg_grp.get_configuration("NotSomeConfig") is None
 
     for mode in ("python", "json"):
-        dumped = cfg.model_dump(exclude_unset=True, mode=mode)
+        dumped = mm_config.model_dump(exclude_unset=True, mode=mode)
         assert "schema_version" in dumped
+
+
+def test_special_groups() -> None:
+    mm_config = MMConfig(
+        devices=[
+            {"label": "MyCam", "library": "DemoCamera", "name": "DCam"},
+        ],
+        configuration_groups=[
+            {
+                "name": "System",
+                "configurations": [
+                    {"name": "Startup", "settings": [("MyCam", "Binning", 2)]},
+                    {"name": "Shutdown", "settings": [("MyCam", "Binning", 2)]},
+                ],
+            }
+        ],
+    )
+    assert mm_config.core_device is None
+    assert mm_config.system_config_group is not None
+    assert mm_config.system_config_group.name == "System"
+    assert mm_config.system_startup is not None
+    assert mm_config.system_startup.name == "Startup"
+    assert mm_config.system_shutdown is not None
+    assert mm_config.system_shutdown.name == "Shutdown"
 
 
 def test_config_errors() -> None:

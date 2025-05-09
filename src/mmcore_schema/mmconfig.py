@@ -1,6 +1,6 @@
 """Schema for Micro-Manager configuration files."""
 
-from collections.abc import Container, Iterable
+from collections.abc import Container
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -221,10 +221,6 @@ class Configuration(_Base):
             "Settings will be applied in the order they are listed."
         ),
     )
-
-    def __iter__(self) -> Iterable[PropertySetting]:  # type: ignore[override]
-        """Iterate over the settings in this configuration."""
-        yield from self.settings
 
 
 class ConfigGroup(_Base):
