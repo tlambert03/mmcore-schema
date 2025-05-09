@@ -461,18 +461,16 @@ class MMConfig(_BaseModel):
         """
         output = Path(filename)
         if output.suffix == ".json":
-            string = self.model_dump_json(indent=indent, **dump_kwargs)
-            output.write_text(string)
+            string = self.model_dump_json(indent=indent, **dump_kwargs) + "\n"
         elif output.suffix in {".yaml", ".yml"}:
             string = self.model_dump_yaml(indent=indent, **dump_kwargs)
-            output.write_text(string)
         elif output.suffix == ".cfg":
             string = self.model_dump_cfg()
-            output.write_text(string)
         else:
             raise NotImplementedError(
                 f"Unsupported output file format: {output.suffix}"
             )
+        output.write_text(string, encoding="utf-8")
 
     @classmethod
     def from_file(cls, filename: str | Path) -> "MMConfig":

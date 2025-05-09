@@ -125,27 +125,6 @@ def load_system_configuration(
                 for state, lbl in dev.state_labels.items():
                     core.defineStateLabel(dev.label, int(state), lbl)
 
-        # if isinstance(dev, CoreDevice):
-        #     method_map: Mapping[str, Callable[[str], Any]] = {
-        #         "Camera": core.setCameraDevice,
-        #         "XYStage": core.setXYStageDevice,
-        #         "Focus": core.setFocusDevice,
-        #         "Shutter": core.setShutterDevice,
-        #         "AutoFocus": core.setAutoFocusDevice,
-        #         "ImageProcessor": core.setImageProcessorDevice,
-        #         "SLM": core.setSLMDevice,
-        #         "Galvo": core.setGalvoDevice,
-        #         "ChannelGroup": core.setChannelGroup,
-        #     }
-        #     for prop in dev.properties:
-        #         prop_name = prop.property
-        #         if prop_name == "TimeoutMs":
-        #             core.setTimeoutMs(int(prop.value))
-        #         if prop_name == "AutoShutter":
-        #             core.setAutoShutter(bool(prop.value))
-        #         elif method := method_map.get(prop_name):
-        #             method(prop.value)
-
     # 4. Configuration groups
     # Special case: "System" Configuration group
     if startup := config.startup_configuration:

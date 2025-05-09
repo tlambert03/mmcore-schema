@@ -410,6 +410,8 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
             if psize.optimal_z_um is not None:
                 yield _join(CfgCmd.PixelSizeOptimalZ_Um, psize.name, psize.optimal_z_um)
 
+    yield ""  # newline at the end of the file
+
 
 # --------------- helpers -----------------
 
