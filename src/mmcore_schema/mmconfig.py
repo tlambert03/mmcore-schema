@@ -40,7 +40,7 @@ class _BaseModel(BaseModel):
 class PropertyValue(_BaseModel):
     """A value associated with a property.
 
-    Note that `device_label` is not specified here, as this object is always a member
+    Note that `device` is not specified here, as this object is always a member
     of a properties list on a specific device.
     """
 
@@ -186,7 +186,7 @@ class Device(_BaseModel):
 class PropertySetting(_BaseModel):
     """A single device property setting."""
 
-    device_label: str = Field(
+    device: str = Field(
         default=...,
         description="The label of the device to set the configuration on",
     )
@@ -200,19 +200,15 @@ class PropertySetting(_BaseModel):
     )
 
     def as_tuple(self) -> tuple[str, str, str]:
-        """Return the setting as a tuple of (device_label, property, value)."""
-        return self.device_label, self.property, self.value
+        """Return the setting as a tuple of (device, property, value)."""
+        return self.device, self.property, self.value
 
     @model_validator(mode="before")
     @classmethod
     def _cast_sequence(cls, value: Any) -> Any:
         """Allow a sequence of 3 items to be passed as (dev_label, prop_name, value)."""
         if isinstance(value, (list, tuple)) and len(value) == 3:
-            return {
-                "device_label": value[0],
-                "property": value[1],
-                "value": value[2],
-            }
+            return {"device": value[0], "property": value[1], "value": value[2]}
         return value
 
 
@@ -300,11 +296,13 @@ class MMConfig(_BaseModel):
     # ----------------------  FIELDS  ----------------------
 
     schema_version: Literal["1.0"] = Field(
-        default="1.0",
+        default=None,  # type: ignore  # (See model_post_init)
         description=(
             "The version of the schema used to create this file. "
             "This is used to determine how to parse the file."
         ),
+        init=False,
+        frozen=True,
     )
     enable_parallel_device_initialization: bool | None = Field(
         default=None,
@@ -383,8 +381,11 @@ class MMConfig(_BaseModel):
 
     def model_post_init(self, context: Any) -> None:
         """Called after the model is initialized."""
-        # always consider the schema version to be set,
-        # so it will be included in the model_dump even with exclude_unset=True
+        # this is a little hack to ensure that schema_version is considered "set"
+        # and also considered not the default, so that it is included in the JSON output
+        # even when exclude_defaults or exclude_unset are set to True.
+        # there might be a better way to do this.
+        object.__setattr__(self, "schema_version", "1.0")
         self.model_fields_set.add("schema_version")
 
     @model_validator(mode="after")

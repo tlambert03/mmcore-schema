@@ -9,7 +9,7 @@
       "type": "string",
       "title": "Schema Version",
       "description": "The version of the schema used to create this file. This is used to determine how to parse the file.",
-      "default": "1.0",
+      "default": null,
       "const": "1.0"
     },
     "enable_parallel_device_initialization": {
@@ -73,7 +73,7 @@
     "PropertyValue": {
       "type": "object",
       "title": "PropertyValue",
-      "description": "A value associated with a property.\n\nNote that `device_label` is not specified here, as this object is always a member\nof a properties list on a specific device.",
+      "description": "A value associated with a property.\n\nNote that `device` is not specified here, as this object is always a member\nof a properties list on a specific device.",
       "properties": {
         "property": {
           "type": "string",
@@ -97,9 +97,9 @@
       "title": "PropertySetting",
       "description": "A single device property setting.",
       "properties": {
-        "device_label": {
+        "device": {
           "type": "string",
-          "title": "Device Label",
+          "title": "Device",
           "description": "The label of the device to set the configuration on"
         },
         "property": {
@@ -114,7 +114,7 @@
         }
       },
       "required": [
-        "device_label",
+        "device",
         "property",
         "value"
       ],
