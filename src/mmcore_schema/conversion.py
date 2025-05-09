@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -328,9 +329,8 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
     ROLE_PROPERTIES = {"Camera", "Shutter", "Focus", "AutoShutter"}
     yield "# Roles"
     for setting in cfg.startup_configuration:
-        if setting.device_label == CORE:
-            if setting.property in ROLE_PROPERTIES:
-                yield _join(CfgCmd.Property, CORE, prop.property, prop.value)
+        if setting.device_label == CORE and setting.property in ROLE_PROPERTIES:
+            yield _join(CfgCmd.Property, CORE, setting.property, setting.value)
     yield ""
 
     # State labels
@@ -342,10 +342,32 @@ def iter_mm_cfg_lines(cfg: MMConfig) -> Iterator[str]:
                 yield _join(CfgCmd.Label, device.label, state, label)
 
     # Configuration groups
-    if cfg.configuration_groups:
+    # merge in startup_configuration and shutdown_configuration into the system group
+    cfg_groups: dict[str, ConfigGroup] = {
+        grp.name: deepcopy(grp) for grp in cfg.configuration_groups
+    }
+
+    # first remove the system group, if it exists
+    # (this will only be the case if System exists, with something other than
+    # startup/shutdown)
+    sys_group = cfg_groups.pop("System", ConfigGroup(name="System"))
+    if cfg.startup_configuration:
+        sys_group.configurations.append(
+            Configuration(name="Startup", settings=cfg.startup_configuration)
+        )
+    if cfg.shutdown_configuration:
+        sys_group.configurations.append(
+            Configuration(name="Shutdown", settings=cfg.shutdown_configuration)
+        )
+    merged_groups = list(cfg_groups.values())
+    # Add the system group at the end if it has any configurations
+    if sys_group.configurations:
+        merged_groups.append(sys_group)
+
+    if merged_groups:
         yield ""
         yield "# Configuration groups"
-    for group in cfg.configuration_groups:
+    for group in merged_groups:
         yield ""
         yield f"# Group: {group.name}"
         for config in group.configurations:

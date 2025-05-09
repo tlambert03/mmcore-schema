@@ -199,6 +199,10 @@ class PropertySetting(_BaseModel):
         description="The value to set for the property on the device",
     )
 
+    def as_tuple(self) -> tuple[str, str, str]:
+        """Return the setting as a tuple of (device_label, property, value)."""
+        return self.device_label, self.property, self.value
+
     @model_validator(mode="before")
     @classmethod
     def _cast_sequence(cls, value: Any) -> Any:
@@ -386,10 +390,31 @@ class MMConfig(_BaseModel):
     @model_validator(mode="after")
     def _validate_model(self) -> "Self":
         """Perform post-validation checks on the model."""
+        # Check for duplicate device labels
         device_names = [d.label for d in self.devices]
         if len(device_names) != len(set(device_names)):
             duplicates = {name for name in device_names if device_names.count(name) > 1}
             raise ValueError(f"Duplicate device labels found: {', '.join(duplicates)}")
+
+        # move System/Start and System/Shutdown from configuration_groups
+        # to startup_configuration and shutdown_configuration
+        for group in self.configuration_groups:
+            if group.name == "System":
+                for config in list(group.configurations):
+                    if config.name == "Startup":
+                        self.startup_configuration = _merge_settings(
+                            self.startup_configuration, config.settings
+                        )
+                        group.configurations.remove(config)
+                    elif config.name == "Shutdown":
+                        self.shutdown_configuration = _merge_settings(
+                            self.shutdown_configuration, config.settings
+                        )
+                        group.configurations.remove(config)
+                # if we're left with no configurations, remove the group entirely
+                if not group.configurations:
+                    self.configuration_groups.remove(group)
+
         return self
 
     # ----------------------  I/O  ----------------------
@@ -475,3 +500,16 @@ class MMConfig(_BaseModel):
         from .pymmcore import load_system_configuration
 
         load_system_configuration(core, self, exclude_devices=exclude_devices)
+
+
+def _merge_settings(
+    target: list[PropertySetting], source: list[PropertySetting]
+) -> list[PropertySetting]:
+    """Merge settings from source into target, avoiding duplicates.
+
+    In case of duplicates, the source setting will overwrite the target setting.
+    """
+    output = {setting.as_tuple()[:2]: setting for setting in target}
+    for setting in source:
+        output[setting.as_tuple()[:2]] = setting
+    return list(output.values())
