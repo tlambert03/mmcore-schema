@@ -64,9 +64,6 @@ class CfgCmd(str, Enum):
     PixelSizeOptimalZ_Um = "PixelSizeOptimalZ_Um"
     Property = "Property"
 
-    # Equipment = "Equipment"
-    # ImageSynchro = "ImageSynchro"
-
     def __str__(self) -> str:
         """Return the string representation of the command."""
         return self.value
@@ -97,6 +94,8 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
 
         # Process the command
         match cmd:
+            # for ease of comparison, these cases are in the same order as in
+            # CMMCore::loadSystemConfigurationImpl()
             case CfgCmd.Device:
                 if len(tokens) != 3:
                     raise _invalid_line_error(line, 3, len(tokens))
@@ -134,13 +133,19 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                     else:
                         device.pre_init_properties.append(prop_value)
 
-            case CfgCmd.Parent:
+            case CfgCmd.Delay:
                 if len(tokens) != 2:
                     raise _invalid_line_error(line, 2, len(tokens))
-                child, parent = tokens
-                parent_device = _ensure_device(parent, devices)
-                _ensure_device(child, devices)
-                parent_device.children.append(child)
+                dev_label, delay = tokens
+                device = _ensure_device(dev_label, devices)
+                device.delay_ms = int(delay)
+
+            case CfgCmd.FocusDirection:
+                if len(tokens) != 2:
+                    raise _invalid_line_error(line, 2, len(tokens))
+                dev_label, direction = tokens
+                device = _ensure_device(dev_label, devices)
+                device.focus_direction = int(direction)  # type: ignore[assignment]
 
             case CfgCmd.Label:
                 if len(tokens) != 3:
@@ -154,12 +159,11 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                     )
                 device.state_labels[state] = state_label
 
-            case CfgCmd.FocusDirection:
-                if len(tokens) != 2:
-                    raise _invalid_line_error(line, 2, len(tokens))
-                dev_label, direction = tokens
-                device = _ensure_device(dev_label, devices)
-                device.focus_direction = int(direction)  # type: ignore[assignment]
+            case "Config":
+                warnings.warn(
+                    "Obsolete command 'Config' ignored in configuration file. ",
+                    stacklevel=2,
+                )
 
             case CfgCmd.ConfigGroup:
                 if len(tokens) == 1:
@@ -233,6 +237,31 @@ def read_mm_cfg_file(file_path: str | Path) -> MMConfig:
                 res_id, value = tokens
                 cfg = _ensure_pixel_size_config(res_id, pixel_size_configs)
                 cfg.optimal_z_um = float(value)
+
+            case "Equipment":
+                warnings.warn(
+                    "Obsolete command 'Equipment' ignored in configuration file. ",
+                    stacklevel=2,
+                )
+            case "ImageSynchro":
+                warnings.warn(
+                    "Obsolete command 'ImageSynchro' ignored in configuration file. ",
+                    stacklevel=2,
+                )
+
+            case CfgCmd.Parent:
+                if len(tokens) != 2:
+                    raise _invalid_line_error(line, 2, len(tokens))
+                child, parent = tokens
+                parent_device = _ensure_device(parent, devices)
+                _ensure_device(child, devices)
+                parent_device.children.append(child)
+
+            case default:
+                warnings.warn(
+                    f"Unknown config command '{default!r}' in line {line!r}. Ignored.",
+                    stacklevel=2,
+                )
 
     _devices: list = list(devices.values())
     if core_device is not None:

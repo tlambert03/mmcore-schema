@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -184,3 +185,15 @@ def load_system_configuration(
 
     core.waitForSystem()
     core.updateSystemStateCache()
+
+    # CMMCore::loadSystemConfigurationImpl would emit
+    # externalCallback_->onSystemConfigurationLoaded() at this point.
+    # we can't do that with pymmcore[nano] since it's not a public API.
+    # but we can emit the event if pymmcore_plus is available
+    if pymmcore_plus := sys.modules.get("pymmcore_plus"):
+        if TYPE_CHECKING:
+            from pymmcore_plus import CMMCorePlus
+        else:
+            CMMCorePlus = getattr(pymmcore_plus, "CMMCorePlus", type(None))
+        if isinstance(core, CMMCorePlus):
+            core.events.systemConfigurationLoaded.emit()
